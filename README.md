@@ -22,6 +22,8 @@ Here's a comparison of the output & memory usage of the Full VAE vs. TAEHV:
 
 See the [example notebook](./examples/TAEHV_T2I_Demo.ipynb) for details on the comparison (it's using the fp16 Diffusers implementation with no CPU offload; I tested on H100 and commented out the `pipe.vae` override to get the Full VAE results).
 
+Since Wan 2.1 uses the same settings as Hunyuan VAE, you can also use TAEHV for Wan 2.1 decoding using the `taew2_1.pth` weights (see the [Wan 2.1 example notebook](./examples/TAEW2.1_T2I_Demo.ipynb)).
+
 ## Limitations
 
 TAEHV is still pretty experimental (specifically, it's a hacky finetune of [TAEM1](https://github.com/madebyollin/taem1) :) using a fairly limited dataset) and I haven't tested it much yet. Please report quality / performance issues as you discover them.
