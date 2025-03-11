@@ -9,18 +9,24 @@ Here's a comparison of the output & memory usage of the Full VAE vs. TAEHV:
 <table>
 <tr><th><tt>pipe.vae</tt></th><th>Full VAE</th><th>TAEHV</th></tr>
 <tr>
-  <td>Decoded Video</td>
+  <td>Decoded Video<br/><sup>(converted to GIF)</sup></td>
   <td><img src="https://github.com/user-attachments/assets/b9ee3405-c210-4410-95ac-639a4ed09c50"/></td>
   <td><img src="https://github.com/user-attachments/assets/3fe3cb6a-30e5-46fe-9458-f0a39e454b86"/></td>
 </tr>
 <tr>
-  <td>Memory</td>
-  <td><img width="281" alt="memory_full" src="https://github.com/user-attachments/assets/d7f80f3b-7030-4e0f-be3d-fad994557105" /></td>
-  <td><img width="278" alt="memory_taehv" src="https://github.com/user-attachments/assets/9ce922dc-d4af-4422-8b70-d0d5cc326167" /></td>
+  <td>Runtime<br/><sup>(in fp16, on GH200)</sup></td>
+  <td></td>
+  <td></td>
+</tr>
+<tr>
+  <td>Memory<br/><sup>(in fp16, on GH200)</sup></td>
+  <td></td>
+  <td></td>
 </tr>
 </table>
 
-See the [example notebook](./examples/TAEHV_T2I_Demo.ipynb) for details on the comparison (it's using the fp16 Diffusers implementation with no CPU offload; I tested on H100 and commented out the `pipe.vae` override to get the Full VAE results).
+
+See the [profiling notebook](./examples/TAEHV_Profiling.ipynb) for details on the comparison the [example notebook](./examples/TAEHV_T2I_Demo.ipynb) for a simpler demo.
 
 Since Wan 2.1 uses the same settings as Hunyuan VAE, you can also use TAEHV for Wan 2.1 decoding using the `taew2_1.pth` weights (see the [Wan 2.1 example notebook](./examples/TAEW2.1_T2I_Demo.ipynb)).
 
