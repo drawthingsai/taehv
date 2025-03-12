@@ -18,7 +18,7 @@ def conv(n_in, n_out, **kwargs):
 class Clamp(nn.Module):
     def forward(self, x):
         return torch.tanh(x / 3) * 3
-        
+
 class MemBlock(nn.Module):
     def __init__(self, n_in, n_out):
         super().__init__()
@@ -144,12 +144,18 @@ def apply_model_with_memblocks(model, x, parallel, show_progress_bar):
         progress_bar.close()
         x = torch.stack(out, 1)
     return x
-        
+
 class TAEHV(nn.Module):
     latent_channels = 16
     image_channels = 3
-    def __init__(self, checkpoint_path="taehv.pth"):
-        """Initialize pretrained TAEHV from the given checkpoints."""
+    def __init__(self, checkpoint_path="taehv.pth", decoder_time_upscale=(True, True), decoder_space_upscale=(True, True, True)):
+        """Initialize pretrained TAEHV from the given checkpoint.
+
+        Arg:
+            checkpoint_path: path to weight file to load. taehv.pth for Hunyuan, taew2_1.pth for Wan 2.1.
+            decoder_time_upscale: whether temporal upsampling is enabled for each block. upsampling can be disabled for a cheaper preview.
+            decoder_space_upscale: whether spatial upsampling is enabled for each block. upsampling can be disabled for a cheaper preview.
+        """
         super().__init__()
         self.encoder = nn.Sequential(
             conv(TAEHV.image_channels, 64), nn.ReLU(inplace=True),
@@ -161,13 +167,28 @@ class TAEHV(nn.Module):
         n_f = [256, 128, 64, 64]
         self.decoder = nn.Sequential(
             Clamp(), conv(TAEHV.latent_channels, n_f[0]), nn.ReLU(inplace=True),
-            MemBlock(n_f[0], n_f[0]), MemBlock(n_f[0], n_f[0]), MemBlock(n_f[0], n_f[0]), nn.Upsample(scale_factor=2), TGrow(n_f[0], 1), conv(n_f[0], n_f[1], bias=False),
-            MemBlock(n_f[1], n_f[1]), MemBlock(n_f[1], n_f[1]), MemBlock(n_f[1], n_f[1]), nn.Upsample(scale_factor=2), TGrow(n_f[1], 2), conv(n_f[1], n_f[2], bias=False),
-            MemBlock(n_f[2], n_f[2]), MemBlock(n_f[2], n_f[2]), MemBlock(n_f[2], n_f[2]), nn.Upsample(scale_factor=2), TGrow(n_f[2], 2), conv(n_f[2], n_f[3], bias=False),
+            MemBlock(n_f[0], n_f[0]), MemBlock(n_f[0], n_f[0]), MemBlock(n_f[0], n_f[0]), nn.Upsample(scale_factor=2 if decoder_space_upscale[0] else 1), TGrow(n_f[0], 1), conv(n_f[0], n_f[1], bias=False),
+            MemBlock(n_f[1], n_f[1]), MemBlock(n_f[1], n_f[1]), MemBlock(n_f[1], n_f[1]), nn.Upsample(scale_factor=2 if decoder_space_upscale[1] else 1), TGrow(n_f[1], 2 if decoder_time_upscale[0] else 1), conv(n_f[1], n_f[2], bias=False),
+            MemBlock(n_f[2], n_f[2]), MemBlock(n_f[2], n_f[2]), MemBlock(n_f[2], n_f[2]), nn.Upsample(scale_factor=2 if decoder_space_upscale[2] else 1), TGrow(n_f[2], 2 if decoder_time_upscale[1] else 1), conv(n_f[2], n_f[3], bias=False),
             nn.ReLU(inplace=True), conv(n_f[3], TAEHV.image_channels),
         )
         if checkpoint_path is not None:
-            self.load_state_dict(torch.load(checkpoint_path, map_location="cpu", weights_only=True))
+            self.load_state_dict(self.patch_tgrow_layers(torch.load(checkpoint_path, map_location="cpu", weights_only=True)))
+
+    def patch_tgrow_layers(self, sd):
+        """Patch TGrow layers to use a smaller kernel if needed.
+
+        Args:
+            sd: state dict to patch
+        """
+        new_sd = self.state_dict()
+        for i, layer in enumerate(self.decoder):
+            if isinstance(layer, TGrow):
+                key = f"decoder.{i}.conv.weight"
+                if sd[key].shape[0] > new_sd[key].shape[0]:
+                    # take the last-timestep output channels
+                    sd[key] = sd[key][-new_sd[key].shape[0]:]
+        return sd
 
     def encode_video(self, x, parallel=True, show_progress_bar=True):
         """Encode a sequence of frames.
