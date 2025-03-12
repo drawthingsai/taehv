@@ -30,6 +30,24 @@ See the [profiling notebook](./examples/TAEHV_Profiling.ipynb) for details on th
 
 Since Wan 2.1 uses the same settings as Hunyuan VAE, you can also use TAEHV for Wan 2.1 decoding using the `taew2_1.pth` weights (see the [Wan 2.1 example notebook](./examples/TAEW2.1_T2I_Demo.ipynb)).
 
+## How can I reduce the decoding cost further?
+
+You can disable temporal or spatial upscaling to get even-cheaper decoding.
+
+```python
+TAEHV(decoder_time_upscale=(False, False), decoder_space_upscale=(True, True, True))
+```
+
+![Image](https://github.com/user-attachments/assets/c517e37b-e53b-4d7d-b282-fbbbce10ade7)
+
+```python
+TAEHV(decoder_time_upscale=(False, False), decoder_space_upscale=(False, False, False))
+```
+
+![Image](https://github.com/user-attachments/assets/62223493-8cad-427b-b13c-fa9919d3fd7b)
+
+If you have a powerful GPU or are decoding at a reduced resolution, you can also set `parallel=True` in `TAEHV.decode_video` to decode all frames at once (which is faster but requires more memory).
+
 ## Limitations
 
 TAEHV is still pretty experimental (specifically, it's a hacky finetune of [TAEM1](https://github.com/madebyollin/taem1) :) using a fairly limited dataset) and I haven't tested it much yet. Please report quality / performance issues as you discover them.
