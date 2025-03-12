@@ -21,7 +21,7 @@ Here's a comparison of the output & memory usage of the Full VAE vs. TAEHV:
 <tr>
   <td>Memory<br/><sup>(in fp16, on GH200)</sup></td>
   <td><strong>~6-9GB Peak Memory Usage</strong><br/><img src="https://github.com/user-attachments/assets/d7837271-c748-4eef-ab37-eda6cc1e6a69"/></td>
-  <td><strong>~0.2GB Peak Memory Usage</strong><br/><img src="https://github.com/user-attachments/assets/c71e2ef5-12f1-431f-b193-29d9a5ee6343"/></td>
+  <td><strong><0.5GB Peak Memory Usage</strong><br/><img src="https://github.com/user-attachments/assets/c71e2ef5-12f1-431f-b193-29d9a5ee6343"/></td>
 </tr>
 </table>
 
