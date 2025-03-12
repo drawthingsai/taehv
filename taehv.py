@@ -165,6 +165,7 @@ class TAEHV(nn.Module):
             conv(64, TAEHV.latent_channels),
         )
         n_f = [256, 128, 64, 64]
+        self.frames_to_trim = 2**sum(decoder_time_upscale) - 1
         self.decoder = nn.Sequential(
             Clamp(), conv(TAEHV.latent_channels, n_f[0]), nn.ReLU(inplace=True),
             MemBlock(n_f[0], n_f[0]), MemBlock(n_f[0], n_f[0]), MemBlock(n_f[0], n_f[0]), nn.Upsample(scale_factor=2 if decoder_space_upscale[0] else 1), TGrow(n_f[0], 1), conv(n_f[0], n_f[1], bias=False),
@@ -213,7 +214,7 @@ class TAEHV(nn.Module):
         Returns NTCHW RGB tensor with ~[0, 1] values.
         """
         x = apply_model_with_memblocks(self.decoder, x, parallel, show_progress_bar)
-        return x[:, 3:]
+        return x[:, self.frames_to_trim:]
 
     def forward(self, x):
         return self.c(x)
