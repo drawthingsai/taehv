@@ -28,7 +28,7 @@ Here's a comparison of the output & memory usage of the Full Hunyuan VAE vs. TAE
 
 See the [profiling notebook](./examples/TAEHV_Profiling.ipynb) for details on this comparison or the [example notebook](./examples/TAEHV_T2I_Demo.ipynb) for a simpler demo.
 
-## How do I use this for Wan 2.1?
+## How do I use TAEHV with Wan 2.1?
 
 Since Wan 2.1 uses the same input / output shapes as Hunyuan VAE, you can also use TAEHV for Wan 2.1 decoding using the `taew2_1.pth` weights (see the [Wan 2.1 example notebook](./examples/TAEW2.1_T2I_Demo.ipynb)).
 
