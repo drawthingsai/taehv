@@ -1,13 +1,13 @@
-# 🥮 Tiny AutoEncoder for Hunyuan Video
+# 🥮 Tiny AutoEncoder for Hunyuan Video & Wan 2.1
 
 ## What is TAEHV?
 
-TAEHV is a Tiny AutoEncoder for Hunyuan Video. TAEHV can decode Hunyuan latents into videos more cheaply (in time & memory) than the full-size Hunyuan VAE, at the cost of slightly lower quality.
+TAEHV is a Tiny AutoEncoder for Hunyuan Video (& Wan 2.1). TAEHV can decode latents into videos more cheaply (in time & memory) than the full-size VAEs, at the cost of slightly lower quality.
 
-Here's a comparison of the output & memory usage of the Full VAE vs. TAEHV:
+Here's a comparison of the output & memory usage of the Full Hunyuan VAE vs. TAEHV:
 
 <table>
-<tr><th><tt>pipe.vae</tt></th><th>Full VAE</th><th>TAEHV</th></tr>
+<tr><th><tt>pipe.vae</tt></th><th>Full Hunyuan VAE</th><th>TAEHV</th></tr>
 <tr>
   <td>Decoded Video<br/><sup>(converted to GIF)</sup></td>
   <td><img src="https://github.com/user-attachments/assets/b9ee3405-c210-4410-95ac-639a4ed09c50"/></td>
@@ -26,11 +26,13 @@ Here's a comparison of the output & memory usage of the Full VAE vs. TAEHV:
 </table>
 
 
-See the [profiling notebook](./examples/TAEHV_Profiling.ipynb) for details on the comparison the [example notebook](./examples/TAEHV_T2I_Demo.ipynb) for a simpler demo.
+See the [profiling notebook](./examples/TAEHV_Profiling.ipynb) for details on this comparison or the [example notebook](./examples/TAEHV_T2I_Demo.ipynb) for a simpler demo.
 
-Since Wan 2.1 uses the same settings as Hunyuan VAE, you can also use TAEHV for Wan 2.1 decoding using the `taew2_1.pth` weights (see the [Wan 2.1 example notebook](./examples/TAEW2.1_T2I_Demo.ipynb)).
+## How do I use this for Wan 2.1?
 
-## How can I reduce the decoding cost further?
+Since Wan 2.1 uses the same input / output shapes as Hunyuan VAE, you can also use TAEHV for Wan 2.1 decoding using the `taew2_1.pth` weights (see the [Wan 2.1 example notebook](./examples/TAEW2.1_T2I_Demo.ipynb)).
+
+## How can I reduce the TAEHV decoding cost further?
 
 You can disable temporal or spatial upscaling to get even-cheaper decoding.
 
