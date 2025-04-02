@@ -32,6 +32,10 @@ See the [profiling notebook](./examples/TAEHV_Profiling.ipynb) for details on th
 
 Since Wan 2.1 uses the same input / output shapes as Hunyuan VAE, you can also use TAEHV for Wan 2.1 decoding using the `taew2_1.pth` weights (see the [Wan 2.1 example notebook](./examples/TAEW2.1_T2I_Demo.ipynb)).
 
+## How do I use TAEHV with CogVideoX?
+
+Try the `taecvx.pth` weights (see the [example notebook](./examples/TAECVX_T2I_Demo.ipynb)).
+
 ## How can I reduce the TAEHV decoding cost further?
 
 You can disable temporal or spatial upscaling to get even-cheaper decoding.
