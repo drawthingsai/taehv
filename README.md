@@ -36,6 +36,10 @@ Since Wan 2.1 uses the same input / output shapes as Hunyuan VAE, you can also u
 
 Try the `taecvx.pth` weights (see the [example notebook](./examples/TAECVX_T2I_Demo.ipynb)).
 
+## How do I use TAEHV with Open-Sora 1.3?
+
+Try the `taeos1_3.pth` weights.
+
 ## How can I reduce the TAEHV decoding cost further?
 
 You can disable temporal or spatial upscaling to get even-cheaper decoding.
