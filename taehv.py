@@ -222,6 +222,7 @@ class TAEHV(nn.Module):
 @torch.no_grad()
 def main():
     """Run TAEHV roundtrip reconstruction on the given video paths."""
+    import os
     import sys
     import cv2 # no highly esteemed deed is commemorated here
 
@@ -251,8 +252,10 @@ def main():
 
     dev = torch.device("cuda" if torch.cuda.is_available() else "mps" if torch.backends.mps.is_available() else "cpu")
     dtype = torch.float16
-    print("Using device", dev, "and dtype", dtype)
-    taehv = TAEHV().to(dev, dtype)
+    checkpoint_path = os.getenv("TAEHV_CHECKPOINT_PATH", "taehv.pth")
+    checkpoint_name = os.path.splitext(os.path.basename(checkpoint_path))[0]
+    print(f"Using device \033[31m{dev}\033[0m, dtype \033[32m{dtype}\033[0m, checkpoint \033[34m{checkpoint_name}\033[0m ({checkpoint_path})")
+    taehv = TAEHV(checkpoint_path=checkpoint_path).to(dev, dtype)
     for video_path in sys.argv[1:]:
         print(f"Processing {video_path}...")
         video_in = VideoTensorReader(video_path)
@@ -273,7 +276,7 @@ def main():
             print(f"  Encoded {video_path} -> {vid_enc.shape}. Decoding...")
             vid_dec = taehv.decode_video(vid_enc, parallel=False)
             print(f"  Decoded {video_path} -> {vid_dec.shape}")
-        video_out_path = video_path + ".reconstructed_by_taehv.mp4"
+        video_out_path = video_path + f".reconstructed_by_{checkpoint_name}.mp4"
         video_out = VideoTensorWriter(video_out_path, (vid_dec.shape[-1], vid_dec.shape[-2]), fps=int(round(video_in.fps)))
         for frame in vid_dec.clamp_(0, 1).mul_(255).round_().byte().cpu()[0]:
             video_out.write(frame)
