@@ -40,6 +40,10 @@ Try the `taecvx.pth` weights (see the [example notebook](./examples/TAECVX_T2I_D
 
 Try the `taeos1_3.pth` weights.
 
+## How do I use TAEHV with Wan 2.2?
+
+Try the `taew2_2.pth` weights.
+
 ## How can I reduce the TAEHV decoding cost further?
 
 You can disable temporal or spatial upscaling to get even-cheaper decoding.
