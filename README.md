@@ -42,7 +42,10 @@ Try the `taeos1_3.pth` weights.
 
 ## How do I use TAEHV with Wan 2.2?
 
-Try the `taew2_2.pth` weights.
+Wan 2.2 uses different VAEs depending on model scale:
+
+* Wan 2.2 5B [uses the new Wan 2.2 VAE](https://github.com/Wan-Video/Wan2.2/blob/main/wan/configs/wan_ti2v_5B.py#L16), so for Wan 2.2 5B you want the `taew2_2.pth` weights
+* Wan 2.2 14B [(confusingly) uses the Wan 2.1 VAE](https://github.com/Wan-Video/Wan2.2/blob/main/wan/configs/wan_t2v_A14B.py#L16), so for Wan 2.2 14B you actually want the `taew2_1.pth` weights
 
 ## How can I reduce the TAEHV decoding cost further?
 
