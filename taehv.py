@@ -160,6 +160,7 @@ class TAEHV(nn.Module):
         self.patch_size = patch_size
         self.latent_channels = latent_channels
         self.image_channels = 3
+        self.is_cogvideox = "taecvx" in checkpoint_path
         if "taew2_2" in checkpoint_path:
             self.patch_size, self.latent_channels = 2, 48
         self.encoder = nn.Sequential(
@@ -207,6 +208,11 @@ class TAEHV(nn.Module):
         Returns NTCHW latent tensor with ~Gaussian values.
         """
         if self.patch_size > 1: x = F.pixel_unshuffle(x, self.patch_size)
+        if x.shape[1] % 4 != 0:
+            # pad at end to multiple of 4
+            n_pad = 4 - x.shape[1] % 4
+            padding = x[:, -1:].repeat_interleave(n_pad, dim=1)
+            x = torch.cat([x, padding], 1)
         return apply_model_with_memblocks(self.encoder, x, parallel, show_progress_bar)
 
     def decode_video(self, x, parallel=True, show_progress_bar=True):
@@ -219,12 +225,16 @@ class TAEHV(nn.Module):
               if False, frames will be processed sequentially.
         Returns NTCHW RGB tensor with ~[0, 1] values.
         """
+        skip_trim = self.is_cogvideox and x.shape[1] % 2 == 0
         x = apply_model_with_memblocks(self.decoder, x, parallel, show_progress_bar)
+        x = x.clamp_(0, 1)
         if self.patch_size > 1: x = F.pixel_shuffle(x, self.patch_size)
+        if skip_trim:
+            # skip trimming for cogvideox to make frame counts match.
+            # this still doesn't have correct temporal alignment for certain frame counts
+            # (cogvideox seems to pad at the start?), but for multiple-of-4 it's fine.
+            return x
         return x[:, self.frames_to_trim:]
-
-    def forward(self, x):
-        return self.c(x)
 
 @torch.no_grad()
 def main():
