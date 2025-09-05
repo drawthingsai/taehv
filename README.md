@@ -1,13 +1,13 @@
-# 🥮 Tiny AutoEncoder for Hunyuan Video & Wan 2.1
+# 🥮 Tiny AutoEncoder for Hunyuan Video
 
 ## What is TAEHV?
 
-TAEHV is a Tiny AutoEncoder for Hunyuan Video (& Wan 2.1). TAEHV can decode latents into videos more cheaply (in time & memory) than the full-size VAEs, at the cost of slightly lower quality.
+TAEHV is a Tiny AutoEncoder for Hunyuan Video (and other similar video models). TAEHV can encode and decode latents into videos more cheaply (in time & memory) than the full-size video VAEs, at the cost of slightly lower quality.
 
-Here's a comparison of the output & memory usage of the Full Hunyuan VAE vs. TAEHV:
+Here's a comparison of the output & memory usage of the Full Hunyuan VAE vs. TAEHV during decoding:
 
 <table>
-<tr><th><tt>pipe.vae</tt></th><th>Full Hunyuan VAE</th><th>TAEHV</th></tr>
+    <tr><th>Decoder AE</th><th>Full Hunyuan VAE</th><th>TAEHV</th></tr>
 <tr>
   <td>Decoded Video<br/><sup>(converted to GIF)</sup></td>
   <td><img src="https://github.com/user-attachments/assets/b9ee3405-c210-4410-95ac-639a4ed09c50"/></td>
@@ -16,7 +16,7 @@ Here's a comparison of the output & memory usage of the Full Hunyuan VAE vs. TAE
 <tr>
   <td>Runtime<br/><sup>(in fp16, on GH200)</sup></td>
   <td><strong>~2-3s</strong> for decoding 61 frames of (512, 320) video</td>
-  <td><strong>~0.5s</strong> for decoding 61 frames of (512, 320) video</td>
+  <td><strong>~0.5s</strong> for decoding 61 frames of (512, 320) video.<br/>Can be even faster with <a href="#how-can-i-make-taehv-even-faster">the right settings</a></td>
 </tr>
 <tr>
   <td>Memory<br/><sup>(in fp16, on GH200)</sup></td>
@@ -24,32 +24,49 @@ Here's a comparison of the output & memory usage of the Full Hunyuan VAE vs. TAE
   <td><strong><0.5GB Peak Memory Usage</strong><br/><img src="https://github.com/user-attachments/assets/c71e2ef5-12f1-431f-b193-29d9a5ee6343"/></td>
 </tr>
 </table>
-
-
 See the [profiling notebook](./examples/TAEHV_Profiling.ipynb) for details on this comparison or the [example notebook](./examples/TAEHV_T2I_Demo.ipynb) for a simpler demo.
 
-## How do I use TAEHV with Wan 2.1?
+## What video models does TAEHV support?
 
-Since Wan 2.1 uses the same input / output shapes as Hunyuan VAE, you can also use TAEHV for Wan 2.1 decoding using the `taew2_1.pth` weights (see the [Wan 2.1 example notebook](./examples/TAEW2.1_T2I_Demo.ipynb)).
+To use TAEHV with different video models, you can load the different `.pth` files from this repo:
 
-## How do I use TAEHV with CogVideoX?
+* For **Wan 2.1**, load the `taew2_1.pth` weights (see the [Wan 2.1 example notebook](./examples/TAEW2.1_T2I_Demo.ipynb)).
+* For **Wan 2.2**, load different VAEs depending on model scale:
+  * For **Wan 2.2 5B**, load the `taew2_2.pth` weights ([example notebook](examples/TAEW2.2_T2I_Demo.ipynb)).
+  * For **Wan 2.2 14B**, load the `taew2_1.pth` weights since Wan 2.2 14B [still uses the older Wan 2.1 VAE](https://github.com/Wan-Video/Wan2.2/blob/main/wan/configs/wan_t2v_A14B.py#L16).
+* For **CogVideoX**,  load the `taecvx.pth` weights ([example notebook](./examples/TAECVX_T2I_Demo.ipynb)).
+* For **Hunyuan Video**, load the `taehv.pth` weights ([example notebook](./examples/TAEHV_T2I_Demo.ipynb)).
+* For **Open-Sora 1.3**, load the `taeos1_3.pth` weights.
+* For **Mochi 1** and **SVD** (which use different architectures), see the other repos [TAEM1](https://github.com/madebyollin/taem1) and [TAESDV](https://github.com/madebyollin/taesdv).
 
-Try the `taecvx.pth` weights (see the [example notebook](./examples/TAECVX_T2I_Demo.ipynb)).
+If there's another open video model that would benefit from a TAEHV version, please file an [issue](https://github.com/madebyollin/taehv/issues) (or, worst-case, try [training your own](https://github.com/madebyollin/seraena/blob/main/TAEHV_Training_Example.ipynb)).
 
-## How do I use TAEHV with Open-Sora 1.3?
+## Where can I get TAEHV?
 
-Try the `taeos1_3.pth` weights.
+TAEHV is available:
 
-## How do I use TAEHV with Wan 2.2?
+* In [ComfyUI](https://github.com/comfyanonymous/ComfyUI)
 
-Wan 2.2 uses different VAEs depending on model scale:
+  * Via the [ComfyUI-WanVideoWrapper](https://github.com/kijai/ComfyUI-WanVideoWrapper/commit/ce7917664697ee044db8b697ed775ed25cecd000) + [VideoHelperSuite](https://github.com/Kosinkadink/ComfyUI-VideoHelperSuite) nodes thanks to [Kijai](https://github.com/kijai) and [AustinMroz](https://github.com/AustinMroz) 
 
-* Wan 2.2 5B [uses the new Wan 2.2 VAE](https://github.com/Wan-Video/Wan2.2/blob/main/wan/configs/wan_ti2v_5B.py#L16), so for Wan 2.2 5B you want the `taew2_2.pth` weights
-* Wan 2.2 14B [(confusingly) uses the Wan 2.1 VAE](https://github.com/Wan-Video/Wan2.2/blob/main/wan/configs/wan_t2v_A14B.py#L16), so for Wan 2.2 14B you actually want the `taew2_1.pth` weights
+  * Via the [ComfyUI-Bleh](https://github.com/blepping/ComfyUI-bleh) nodes thanks to [blepping](https://github.com/blepping)
+* In [SDNext](https://github.com/vladmandic/sdnext) thanks to [vladmandic](https://github.com/vladmandic)
+* In the Wan2.1 [Self-Forcing](https://github.com/guandeh17/Self-Forcing) demo thanks to [Guande He](https://github.com/guandeh17) and [Xun Huang](https://github.com/xunhuang1995)
 
-## How can I reduce the TAEHV decoding cost further?
+If you've added TAEHV support elsewhere, LMK and I can add a link here.
 
-You can disable temporal or spatial upscaling to get even-cheaper decoding.
+## How do I use TAEHV with 🧨 Diffusers?
+
+You can use TAEHV with Diffusers by applying a small bit of wrapper code ([example notebook](https://github.com/madebyollin/taehv/blob/main/examples/TAEW2.1_Diffusers_Encoding_and_Decoding_Demo.ipynb)).
+If you're writing new code involving both TAEHV and Diffusers, keep the following conventions in mind:
+
+1. TAEHV stores image values in the range **[0, 1]**, whereas Diffusers uses **[-1, 1]**.
+2. TAEHV stores videos in **NTCHW** dimension order (time, then channels), while Diffusers stores videos in **NCTHW** dimension order.
+3. TAEHV does not use any latent scales / shifts (TAEHV encodes / decodes exactly what diffusion models use), whereas Diffusers requires **explicitly applying** a `latents_mean` and `latents_std` each time you encode or decode something.
+
+## How can I make TAEHV even faster?
+
+You can disable TAEHV's temporal or spatial upscaling to get even-cheaper decoding.
 
 ```python
 TAEHV(decoder_time_upscale=(False, False), decoder_space_upscale=(True, True, True))
@@ -65,6 +82,27 @@ TAEHV(decoder_time_upscale=(False, False), decoder_space_upscale=(False, False, 
 
 If you have a powerful GPU or are decoding at a reduced resolution, you can also set `parallel=True` in `TAEHV.decode_video` to decode all frames at once (which is faster but requires more memory).
 
+TAEHV is fully causal (with finite receptive field) so it's structurally possible to display TAEHV output "realtime" (the instant each frame is decoded) rather than waiting for the sequence to complete.
+
 ## Limitations
 
-TAEHV is still pretty experimental (specifically, it's a hacky finetune of [TAEM1](https://github.com/madebyollin/taem1) :) using a fairly limited dataset) and I haven't tested it much yet. Please report quality / performance issues as you discover them.
+TAEHV is generally very tiny compared to the full VAEs it's mimicking, so TAEHV output is usually blurrier/more-artifacty than the full VAEs. I also don't have great quality benchmarks yet (should I be checking FVD? JEDi? idk) so I'm mostly relying on visual spot-checks. Please report any quality issues as you discover them (ideally with test latents or videos so I can reproduce & debug).
+
+## How can I cite TAEHV in a publication?
+
+If you find TAEHV useful in your research, you can cite the TAEHV repo as a web link:
+
+```bibtex
+@misc {BoerBohan2025TAEHV,
+  author = {Boer Bohan, Ollin},
+  title = {TAEHV: Tiny AutoEncoder for Hunyuan Video},
+  year = {2025},
+  howpublished = {\url{https://github.com/madebyollin/taehv}},
+  url = {https://github.com/madebyollin/taehv},
+}
+```
+
+The TAEHV repo contents change over time, so I recommend also noting the latest commit hash and access date in a note field, e.g.
+```bibtex
+note = {Commit: \texttt{5ce7381}, Accessed: 2025-09-05}
+```
