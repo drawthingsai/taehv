@@ -98,7 +98,6 @@ If you find TAEHV useful in your research, you can cite the TAEHV repo as a web 
   title = {TAEHV: Tiny AutoEncoder for Hunyuan Video},
   year = {2025},
   howpublished = {\url{https://github.com/madebyollin/taehv}},
-  url = {https://github.com/madebyollin/taehv},
 }
 ```
 
