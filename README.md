@@ -24,6 +24,7 @@ Here's a comparison of the output & memory usage of the Full Hunyuan VAE vs. TAE
   <td><strong><0.5GB Peak Memory Usage</strong><br/><img src="https://github.com/user-attachments/assets/c71e2ef5-12f1-431f-b193-29d9a5ee6343"/></td>
 </tr>
 </table>
+
 See the [profiling notebook](./examples/TAEHV_Profiling.ipynb) for details on this comparison or the [example notebook](./examples/TAEHV_T2I_Demo.ipynb) for a simpler demo.
 
 ## What video models does TAEHV support?
