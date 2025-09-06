@@ -29,10 +29,10 @@ See the [profiling notebook](./examples/TAEHV_Profiling.ipynb) for details on th
 
 ## What video models does TAEHV support?
 
-To use TAEHV with different video models, you can load the different `.pth` files from this repo:
+To use TAEHV with different video models, you can load the different `.pth` (model weight) files from this repo:
 
 * For **Wan 2.1**, load the `taew2_1.pth` weights (see the [Wan 2.1 example notebook](./examples/TAEW2.1_T2I_Demo.ipynb)).
-* For **Wan 2.2**, load different VAEs depending on model scale:
+* For **Wan 2.2**, load different `.pth` files depending on model scale:
   * For **Wan 2.2 5B**, load the `taew2_2.pth` weights ([example notebook](examples/TAEW2.2_T2I_Demo.ipynb)).
   * For **Wan 2.2 14B**, load the `taew2_1.pth` weights since Wan 2.2 14B [still uses the older Wan 2.1 VAE](https://github.com/Wan-Video/Wan2.2/blob/main/wan/configs/wan_t2v_A14B.py#L16).
 * For **CogVideoX**,  load the `taecvx.pth` weights ([example notebook](./examples/TAECVX_T2I_Demo.ipynb)).
