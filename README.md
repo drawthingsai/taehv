@@ -35,6 +35,7 @@ To use TAEHV with different video models, you can load the different `.pth` (mod
 * For **Wan 2.2**, load different `.pth` files depending on model scale:
   * For **Wan 2.2 5B**, load the `taew2_2.pth` weights ([example notebook](examples/TAEW2.2_T2I_Demo.ipynb)).
   * For **Wan 2.2 14B**, load the `taew2_1.pth` weights since Wan 2.2 14B [still uses the older Wan 2.1 VAE](https://github.com/Wan-Video/Wan2.2/blob/main/wan/configs/wan_t2v_A14B.py#L16).
+* for **Qwen Image**, load the `taew2_1.pth` weights (since Qwen Image uses the Wan 2.1 VAE encoder).
 * For **CogVideoX**,  load the `taecvx.pth` weights ([example notebook](./examples/TAECVX_T2I_Demo.ipynb)).
 * For **Hunyuan Video**, load the `taehv.pth` weights ([example notebook](./examples/TAEHV_T2I_Demo.ipynb)).
 * For **Open-Sora 1.3**, load the `taeos1_3.pth` weights.
