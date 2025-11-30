@@ -29,17 +29,20 @@ See the [profiling notebook](./examples/TAEHV_Profiling.ipynb) for details on th
 
 ## What video models does TAEHV support?
 
-To use TAEHV with different video models, you can load the different `.pth` (model weight) files from this repo:
+To use TAEHV with different video models, you can load the different model weight files from this repo:
 
-* For **Wan 2.1**, load the `taew2_1.pth` weights (see the [Wan 2.1 example notebook](./examples/TAEW2.1_T2I_Demo.ipynb)).
-* For **Wan 2.2**, load different `.pth` files depending on model scale:
-  * For **Wan 2.2 5B**, load the `taew2_2.pth` weights ([example notebook](examples/TAEW2.2_T2I_Demo.ipynb)).
-  * For **Wan 2.2 14B**, load the `taew2_1.pth` weights since Wan 2.2 14B [still uses the older Wan 2.1 VAE](https://github.com/Wan-Video/Wan2.2/blob/main/wan/configs/wan_t2v_A14B.py#L16).
-* for **Qwen Image**, load the `taew2_1.pth` weights (since Qwen Image uses the Wan 2.1 VAE encoder).
-* For **CogVideoX**,  load the `taecvx.pth` weights ([example notebook](./examples/TAECVX_T2I_Demo.ipynb)).
-* For **Hunyuan Video**, load the `taehv.pth` weights ([example notebook](./examples/TAEHV_T2I_Demo.ipynb)).
-* For **Open-Sora 1.3**, load the `taeos1_3.pth` weights.
+* For **Hunyuan Video 1.5**, load the `taehv1_5` weights ([example notebook](./examples/TAEHV1.5_Encoding_Decoding_Demo.ipynb))
+* For **Wan 2.1**, load the `taew2_1` weights (see the [Wan 2.1 example notebook](./examples/TAEW2.1_T2I_Demo.ipynb)).
+* For **Wan 2.2**, load different files depending on model scale:
+  * For **Wan 2.2 5B**, load the `taew2_2` weights ([example notebook](examples/TAEW2.2_T2I_Demo.ipynb)).
+  * For **Wan 2.2 14B**, load the `taew2_1` weights since Wan 2.2 14B [still uses the older Wan 2.1 VAE](https://github.com/Wan-Video/Wan2.2/blob/main/wan/configs/wan_t2v_A14B.py#L16).
+* for **Qwen Image**, load the `taew2_1` weights (since Qwen Image uses the Wan 2.1 VAE encoder).
+* For **CogVideoX**,  load the `taecvx` weights ([example notebook](./examples/TAECVX_T2I_Demo.ipynb)).
+* For **Hunyuan Video 1**, load the `taehv` weights ([example notebook](./examples/TAEHV_T2I_Demo.ipynb)).
+* For **Open-Sora 1.3**, load the `taeos1_3` weights.
 * For **Mochi 1** and **SVD** (which use different architectures), see the other repos [TAEM1](https://github.com/madebyollin/taem1) and [TAESDV](https://github.com/madebyollin/taesdv).
+
+The main model weight `.pth` files are in the repository root directory. Converted `.safetensors` files are located in the [safetensors](./safetensors) subdirectory.
 
 If there's another open video model that would benefit from a TAEHV version, please file an [issue](https://github.com/madebyollin/taehv/issues) (or, worst-case, try [training your own](https://github.com/madebyollin/seraena/blob/main/TAEHV_Training_Example.ipynb)).
 
@@ -52,6 +55,7 @@ TAEHV is available:
   * Via the [ComfyUI-WanVideoWrapper](https://github.com/kijai/ComfyUI-WanVideoWrapper/commit/ce7917664697ee044db8b697ed775ed25cecd000) + [VideoHelperSuite](https://github.com/Kosinkadink/ComfyUI-VideoHelperSuite) nodes thanks to [Kijai](https://github.com/kijai) and [AustinMroz](https://github.com/AustinMroz) 
 
   * Via the [ComfyUI-Bleh](https://github.com/blepping/ComfyUI-bleh) nodes thanks to [blepping](https://github.com/blepping)
+  * Via [this PR](https://github.com/comfyanonymous/ComfyUI/pull/10884) thanks to [Kijai](https://github.com/kijai)
 * In [SDNext](https://github.com/vladmandic/sdnext) thanks to [vladmandic](https://github.com/vladmandic)
 * In the Wan2.1 [Self-Forcing](https://github.com/guandeh17/Self-Forcing) demo thanks to [Guande He](https://github.com/guandeh17) and [Xun Huang](https://github.com/xunhuang1995)
 

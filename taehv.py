@@ -163,6 +163,8 @@ class TAEHV(nn.Module):
         self.is_cogvideox = checkpoint_path is not None and "taecvx" in checkpoint_path
         if checkpoint_path is not None and "taew2_2" in checkpoint_path:
             self.patch_size, self.latent_channels = 2, 48
+        if checkpoint_path is not None and "taehv1_5" in checkpoint_path:
+            self.patch_size, self.latent_channels = 2, 32
         self.encoder = nn.Sequential(
             conv(self.image_channels*self.patch_size**2, 64), nn.ReLU(inplace=True),
             TPool(64, 2), conv(64, 64, stride=2, bias=False), MemBlock(64, 64), MemBlock(64, 64), MemBlock(64, 64),
