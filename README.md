@@ -61,6 +61,14 @@ TAEHV is available:
 
 If you've added TAEHV support elsewhere, LMK and I can add a link here.
 
+## What are the limitations of TAEHV?
+
+TAEHV is fast and well-suited for live previewing or interactive video, but TAEHV doesn't yet match the quality of the full-size VAEs.
+
+You can see detailed quality comparisons of TAEHV vs full-size VAEs [here](https://huggingface.co/datasets/madebyollin/movirec).
+
+<img width="512" alt="Speed vs quality chart from MoViRec benchmark" src="https://github.com/user-attachments/assets/679b9ad2-5e32-458a-9398-14c0944eda3e" />
+
 ## How do I use TAEHV with 🧨 Diffusers?
 
 You can use TAEHV with Diffusers by applying a small bit of wrapper code ([example notebook](https://github.com/madebyollin/taehv/blob/main/examples/TAEW2.1_Diffusers_Encoding_and_Decoding_Demo.ipynb)).
@@ -89,10 +97,6 @@ TAEHV(decoder_time_upscale=(False, False), decoder_space_upscale=(False, False, 
 If you have a powerful GPU or are decoding at a reduced resolution, you can also set `parallel=True` in `TAEHV.decode_video` to decode all frames at once (which is faster but requires more memory).
 
 TAEHV is fully causal (with finite receptive field) so it's structurally possible to display TAEHV output "realtime" (the instant each frame is decoded) rather than waiting for the sequence to complete.
-
-## Limitations
-
-TAEHV is generally very tiny compared to the full VAEs it's mimicking, so TAEHV output is usually blurrier/more-artifacty than the full VAEs. I also don't have great quality benchmarks yet (should I be checking FVD? JEDi? idk) so I'm mostly relying on visual spot-checks. Please report any quality issues as you discover them (ideally with test latents or videos so I can reproduce & debug).
 
 ## How can I cite TAEHV in a publication?
 
