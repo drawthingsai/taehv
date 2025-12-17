@@ -51,11 +51,10 @@ If there's another open video model that would benefit from a TAEHV version, ple
 TAEHV is available:
 
 * In [ComfyUI](https://github.com/comfyanonymous/ComfyUI)
-
+  * In main, thanks to [this PR](https://github.com/comfyanonymous/ComfyUI/pull/10884) from [Kijai](https://github.com/kijai)
   * Via the [ComfyUI-WanVideoWrapper](https://github.com/kijai/ComfyUI-WanVideoWrapper/commit/ce7917664697ee044db8b697ed775ed25cecd000) + [VideoHelperSuite](https://github.com/Kosinkadink/ComfyUI-VideoHelperSuite) nodes thanks to [Kijai](https://github.com/kijai) and [AustinMroz](https://github.com/AustinMroz) 
-
   * Via the [ComfyUI-Bleh](https://github.com/blepping/ComfyUI-bleh) nodes thanks to [blepping](https://github.com/blepping)
-  * Via [this PR](https://github.com/comfyanonymous/ComfyUI/pull/10884) thanks to [Kijai](https://github.com/kijai)
+* In [`stable-diffusion.cpp`](https://github.com/leejet/stable-diffusion.cpp) thanks to this [PR](https://github.com/leejet/stable-diffusion.cpp/pull/937) from [stduhpf](https://github.com/stduhpf)
 * In [SDNext](https://github.com/vladmandic/sdnext) thanks to [vladmandic](https://github.com/vladmandic)
 * In the Wan2.1 [Self-Forcing](https://github.com/guandeh17/Self-Forcing) demo thanks to [Guande He](https://github.com/guandeh17) and [Xun Huang](https://github.com/xunhuang1995)
 
