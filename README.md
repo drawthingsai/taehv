@@ -67,7 +67,7 @@ TAEHV is fast and well-suited for live previewing or interactive video, but TAEH
 
 You can see detailed quality comparisons of TAEHV vs full-size VAEs [here](https://huggingface.co/datasets/madebyollin/movirec).
 
-<img width="512" alt="Speed vs quality chart from MoViRec benchmark" src="https://github.com/user-attachments/assets/679b9ad2-5e32-458a-9398-14c0944eda3e" />
+<img width="512" alt="Speed vs quality chart from MoViRec benchmark" src="https://github.com/user-attachments/assets/b5f573fa-d21f-45eb-8616-f852ba43f08b" />
 
 ## How do I use TAEHV with 🧨 Diffusers?
 
