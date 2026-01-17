@@ -146,11 +146,12 @@ def apply_model_with_memblocks(model, x, parallel, show_progress_bar):
     return x
 
 class TAEHV(nn.Module):
-    def __init__(self, checkpoint_path="taehv.pth", decoder_time_upscale=(True, True), decoder_space_upscale=(True, True, True), patch_size=1, latent_channels=16):
+    def __init__(self, checkpoint_path="taehv.pth", encoder_time_downscale=(True, True, False), decoder_time_upscale=(False, True, True), decoder_space_upscale=(True, True, True), patch_size=1, latent_channels=16):
         """Initialize pretrained TAEHV from the given checkpoint.
 
         Arg:
             checkpoint_path: path to weight file to load. taehv.pth for Hunyuan, taew2_1.pth for Wan 2.1.
+            encoder_time_downscale: whether temporal downsampling is enabled for each block.
             decoder_time_upscale: whether temporal upsampling is enabled for each block. upsampling can be disabled for a cheaper preview.
             decoder_space_upscale: whether spatial upsampling is enabled for each block. upsampling can be disabled for a cheaper preview.
             patch_size: input/output pixelshuffle patch-size for this model.
@@ -160,27 +161,35 @@ class TAEHV(nn.Module):
         self.patch_size = patch_size
         self.latent_channels = latent_channels
         self.image_channels = 3
+        if len(decoder_time_upscale) == 2:
+            decoder_time_upscale = (False, *decoder_time_upscale)
         self.is_cogvideox = checkpoint_path is not None and "taecvx" in checkpoint_path
         if checkpoint_path is not None and "taew2_2" in checkpoint_path:
             self.patch_size, self.latent_channels = 2, 48
         if checkpoint_path is not None and "taehv1_5" in checkpoint_path:
             self.patch_size, self.latent_channels = 2, 32
+        if checkpoint_path is not None and "taeltx_2" in checkpoint_path:
+            self.patch_size, self.latent_channels, encoder_time_downscale, decoder_time_upscale = 4, 128, (True, True, True), (True, True, True)
         self.encoder = nn.Sequential(
             conv(self.image_channels*self.patch_size**2, 64), nn.ReLU(inplace=True),
-            TPool(64, 2), conv(64, 64, stride=2, bias=False), MemBlock(64, 64), MemBlock(64, 64), MemBlock(64, 64),
-            TPool(64, 2), conv(64, 64, stride=2, bias=False), MemBlock(64, 64), MemBlock(64, 64), MemBlock(64, 64),
-            TPool(64, 1), conv(64, 64, stride=2, bias=False), MemBlock(64, 64), MemBlock(64, 64), MemBlock(64, 64),
+            TPool(64, 2 if encoder_time_downscale[0] else 1), conv(64, 64, stride=2, bias=False), MemBlock(64, 64), MemBlock(64, 64), MemBlock(64, 64),
+            TPool(64, 2 if encoder_time_downscale[1] else 1), conv(64, 64, stride=2, bias=False), MemBlock(64, 64), MemBlock(64, 64), MemBlock(64, 64),
+            TPool(64, 2 if encoder_time_downscale[2] else 1), conv(64, 64, stride=2, bias=False), MemBlock(64, 64), MemBlock(64, 64), MemBlock(64, 64),
             conv(64, self.latent_channels),
         )
         n_f = [256, 128, 64, 64]
-        self.frames_to_trim = 2**sum(decoder_time_upscale) - 1
         self.decoder = nn.Sequential(
             Clamp(), conv(self.latent_channels, n_f[0]), nn.ReLU(inplace=True),
-            MemBlock(n_f[0], n_f[0]), MemBlock(n_f[0], n_f[0]), MemBlock(n_f[0], n_f[0]), nn.Upsample(scale_factor=2 if decoder_space_upscale[0] else 1), TGrow(n_f[0], 1), conv(n_f[0], n_f[1], bias=False),
-            MemBlock(n_f[1], n_f[1]), MemBlock(n_f[1], n_f[1]), MemBlock(n_f[1], n_f[1]), nn.Upsample(scale_factor=2 if decoder_space_upscale[1] else 1), TGrow(n_f[1], 2 if decoder_time_upscale[0] else 1), conv(n_f[1], n_f[2], bias=False),
-            MemBlock(n_f[2], n_f[2]), MemBlock(n_f[2], n_f[2]), MemBlock(n_f[2], n_f[2]), nn.Upsample(scale_factor=2 if decoder_space_upscale[2] else 1), TGrow(n_f[2], 2 if decoder_time_upscale[1] else 1), conv(n_f[2], n_f[3], bias=False),
+            MemBlock(n_f[0], n_f[0]), MemBlock(n_f[0], n_f[0]), MemBlock(n_f[0], n_f[0]), nn.Upsample(scale_factor=2 if decoder_space_upscale[0] else 1), TGrow(n_f[0], 2 if decoder_time_upscale[0] else 1), conv(n_f[0], n_f[1], bias=False),
+            MemBlock(n_f[1], n_f[1]), MemBlock(n_f[1], n_f[1]), MemBlock(n_f[1], n_f[1]), nn.Upsample(scale_factor=2 if decoder_space_upscale[1] else 1), TGrow(n_f[1], 2 if decoder_time_upscale[1] else 1), conv(n_f[1], n_f[2], bias=False),
+            MemBlock(n_f[2], n_f[2]), MemBlock(n_f[2], n_f[2]), MemBlock(n_f[2], n_f[2]), nn.Upsample(scale_factor=2 if decoder_space_upscale[2] else 1), TGrow(n_f[2], 2 if decoder_time_upscale[2] else 1), conv(n_f[2], n_f[3], bias=False),
             nn.ReLU(inplace=True), conv(n_f[3], self.image_channels*self.patch_size**2),
         )
+        # computed properties
+        self.t_downscale = 2**sum(t.stride == 2 for t in self.encoder if isinstance(t, TPool))
+        self.t_upscale = 2**sum(t.stride == 2 for t in self.decoder if isinstance(t, TGrow))
+        self.frames_to_trim = self.t_upscale - 1
+
         if checkpoint_path is not None:
             self.load_state_dict(self.patch_tgrow_layers(torch.load(checkpoint_path, map_location="cpu", weights_only=True)))
 
@@ -210,9 +219,9 @@ class TAEHV(nn.Module):
         Returns NTCHW latent tensor with ~Gaussian values.
         """
         if self.patch_size > 1: x = F.pixel_unshuffle(x, self.patch_size)
-        if x.shape[1] % 4 != 0:
-            # pad at end to multiple of 4
-            n_pad = 4 - x.shape[1] % 4
+        if x.shape[1] % self.t_downscale != 0:
+            # pad at end to multiple of self.t_downscale
+            n_pad = self.t_downscale - x.shape[1] % self.t_downscale
             padding = x[:, -1:].repeat_interleave(n_pad, dim=1)
             x = torch.cat([x, padding], 1)
         return apply_model_with_memblocks(self.encoder, x, parallel, show_progress_bar)
@@ -221,7 +230,7 @@ class TAEHV(nn.Module):
         """Decode a sequence of frames.
 
         Args:
-            x: input NTCHW latent (C=12) tensor with ~Gaussian values.
+            x: input NTCHW latent (C=self.latent_channels) tensor with ~Gaussian values.
             parallel: if True, all frames will be processed at once.
               (this is faster but may require more memory).
               if False, frames will be processed sequentially.

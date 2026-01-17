@@ -40,6 +40,7 @@ To use TAEHV with different video models, you can load the different model weigh
 * For **CogVideoX**,  load the `taecvx` weights ([example notebook](./examples/TAECVX_T2I_Demo.ipynb)).
 * For **Hunyuan Video 1**, load the `taehv` weights ([example notebook](./examples/TAEHV_T2I_Demo.ipynb)).
 * For **Open-Sora 1.3**, load the `taeos1_3` weights.
+* For **LTX-2**, load the `taeltx_2` weights.
 * For **Mochi 1** and **SVD** (which use different architectures), see the other repos [TAEM1](https://github.com/madebyollin/taem1) and [TAESDV](https://github.com/madebyollin/taesdv).
 
 The main model weight `.pth` files are in the repository root directory. Converted `.safetensors` files are located in the [safetensors](./safetensors) subdirectory.
