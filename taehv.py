@@ -9,7 +9,6 @@ import torch.nn.functional as F
 from tqdm.auto import tqdm
 from collections import namedtuple
 
-DecoderResult = namedtuple("DecoderResult", ("frame", "memory"))
 TWorkItem = namedtuple("TWorkItem", ("input_tensor", "block_index"))
 
 def conv(n_in, n_out, **kwargs):
@@ -47,6 +46,106 @@ class TGrow(nn.Module):
         x = self.conv(x)
         return x.reshape(-1, C, H, W)
 
+def apply_model_with_memblocks_parallel(model, x, show_progress_bar):
+    """
+    Apply a sequential model with memblocks to the given input,
+    with parallelization over the time axis and iteration over blocks.
+
+    Args:
+    - model: nn.Sequential of blocks to apply
+    - x: input data, of dimensions NTCHW
+    - show_progress_bar: if True, enables tqdm progressbar display
+
+    Returns NTCHW tensor of output data.
+    """
+    assert x.ndim == 5, f"TAEHV operates on NTCHW tensors, but got {x.ndim}-dim tensor"
+    N, T, C, H, W = x.shape
+    x = x.reshape(N*T, C, H, W)
+
+    # parallel over input timesteps, iterate over blocks
+    for b in tqdm(model, disable=not show_progress_bar):
+        if isinstance(b, MemBlock):
+            NT, C, H, W = x.shape
+            T = NT // N
+            _x = x.reshape(N, T, C, H, W)
+            # pad with zeros along time axis (i.e. empty memory), slice
+            block_memory = F.pad(_x, (0,0,0,0,0,0,1,0), value=0)[:,:T].reshape(x.shape)
+            x = b(x, block_memory)
+        else:
+            x = b(x)
+    NT, C, H, W = x.shape
+    T = NT // N
+    return x.view(N, T, C, H, W)
+
+def apply_model_with_memblocks_sequential_single_step(model, memory, work_queue, progress_bar=None):
+    """
+    Process the work queue (a graph traversal over blocks and timesteps)
+    until an output frame is produced or the queue is empty.
+    Mutates memory and work_queue in place.
+
+    Returns N1CHW output tensor, or None if the queue needs more input.
+    """
+    while work_queue:
+        xt, i = work_queue.pop(0)
+        if progress_bar is not None and i == 0:
+            progress_bar.update(1)
+        if i == len(model):
+            return xt.unsqueeze(1)
+        b = model[i]
+        if isinstance(b, MemBlock):
+            # mem blocks are simple since we're visiting the graph in causal order
+            if memory[i] is None:
+                xt_new = b(xt, xt * 0)
+            else:
+                xt_new = b(xt, memory[i])
+            memory[i] = xt
+            work_queue.insert(0, TWorkItem(xt_new, i+1))
+        elif isinstance(b, TPool):
+            # pool blocks accumulate inputs until they have enough to pool
+            if memory[i] is None:
+                memory[i] = []
+            memory[i].append(xt)
+            if len(memory[i]) > b.stride:
+                raise ValueError(f"TPool memory overflow: {len(memory[i])} items for stride {b.stride}")
+            elif len(memory[i]) == b.stride:
+                N, C, H, W = xt.shape
+                xt = b(torch.cat(memory[i], 1).view(N*b.stride, C, H, W))
+                memory[i] = []
+                work_queue.insert(0, TWorkItem(xt, i+1))
+        elif isinstance(b, TGrow):
+            xt = b(xt)
+            NT, C, H, W = xt.shape
+            for xt_next in reversed(xt.view(NT//b.stride, b.stride*C, H, W).chunk(b.stride, 1)):
+                work_queue.insert(0, TWorkItem(xt_next, i+1))
+        else:
+            xt = b(xt)
+            work_queue.insert(0, TWorkItem(xt, i+1))
+    return None
+
+def apply_model_with_memblocks_sequential(model, x, show_progress_bar):
+    """
+    Apply a sequential model with memblocks to the given input,
+    with iteration over timesteps as well as blocks.
+
+    Args:
+    - model: nn.Sequential of blocks to apply
+    - x: input data, of dimensions NTCHW
+    - show_progress_bar: if True, enables tqdm progressbar display
+
+    Returns NTCHW tensor of output data.
+    """
+    assert x.ndim == 5, f"TAEHV operates on NTCHW tensors, but got {x.ndim}-dim tensor"
+    work_queue = [TWorkItem(xt, 0) for xt in x.unbind(1)]
+    memory = [None] * len(model)
+    progress_bar = tqdm(range(len(work_queue)), disable=not show_progress_bar)
+    out = []
+    while work_queue:
+        xt = apply_model_with_memblocks_sequential_single_step(model, memory, work_queue, progress_bar)
+        if xt is not None:
+            out.append(xt)
+    progress_bar.close()
+    return torch.cat(out, 1)
+
 def apply_model_with_memblocks(model, x, parallel, show_progress_bar):
     """
     Apply a sequential model with memblocks to the given input.
@@ -59,91 +158,10 @@ def apply_model_with_memblocks(model, x, parallel, show_progress_bar):
 
     Returns NTCHW tensor of output data.
     """
-    assert x.ndim == 5, f"TAEHV operates on NTCHW tensors, but got {x.ndim}-dim tensor"
-    N, T, C, H, W = x.shape
     if parallel:
-        x = x.reshape(N*T, C, H, W)
-        # parallel over input timesteps, iterate over blocks
-        for b in tqdm(model, disable=not show_progress_bar):
-            if isinstance(b, MemBlock):
-                NT, C, H, W = x.shape
-                T = NT // N
-                _x = x.reshape(N, T, C, H, W)
-                mem = F.pad(_x, (0,0,0,0,0,0,1,0), value=0)[:,:T].reshape(x.shape) 
-                x = b(x, mem)
-            else:
-                x = b(x)
-        NT, C, H, W = x.shape
-        T = NT // N
-        x = x.view(N, T, C, H, W)
+        return apply_model_with_memblocks_parallel(model, x, show_progress_bar)
     else:
-        # TODO(oboerbohan): at least on macos this still gradually uses more memory during decode...
-        # need to fix :(
-        out = []
-        # iterate over input timesteps and also iterate over blocks.
-        # because of the cursed TPool/TGrow blocks, this is not a nested loop,
-        # it's actually a ***graph traversal*** problem! so let's make a queue
-        work_queue = [TWorkItem(xt, 0) for t, xt in enumerate(x.reshape(N, T * C, H, W).chunk(T, dim=1))]
-        # in addition to manually managing our queue, we also need to manually manage our progressbar.
-        # we'll update it for every source node that we consume.
-        progress_bar = tqdm(range(T), disable=not show_progress_bar)
-        # we'll also need a separate addressable memory per node as well
-        mem = [None] * len(model)
-        while work_queue:
-            xt, i = work_queue.pop(0)
-            if i == 0:
-                # new source node consumed
-                progress_bar.update(1)
-            if i == len(model):
-                # reached end of the graph, append result to output list
-                out.append(xt)
-            else:
-                # fetch the block to process
-                b = model[i]
-                if isinstance(b, MemBlock):
-                    # mem blocks are simple since we're visiting the graph in causal order
-                    if mem[i] is None:
-                        xt_new = b(xt, xt * 0)
-                        mem[i] = xt
-                    else:
-                        xt_new = b(xt, mem[i])
-                        mem[i].copy_(xt) # inplace might reduce mysterious pytorch memory allocations? doesn't help though
-                    # add successor to work queue
-                    work_queue.insert(0, TWorkItem(xt_new, i+1))
-                elif isinstance(b, TPool):
-                    # pool blocks are miserable
-                    if mem[i] is None:
-                        mem[i] = [] # pool memory is itself a queue of inputs to pool
-                    mem[i].append(xt)
-                    if len(mem[i]) > b.stride:
-                        # pool mem is in invalid state, we should have pooled before this
-                        raise ValueError("???")
-                    elif len(mem[i]) < b.stride:
-                        # pool mem is not yet full, go back to processing the work queue
-                        pass
-                    else:
-                        # pool mem is ready, run the pool block
-                        N, C, H, W = xt.shape 
-                        xt = b(torch.cat(mem[i], 1).view(N*b.stride, C, H, W))
-                        # reset the pool mem
-                        mem[i] = []
-                        # add successor to work queue
-                        work_queue.insert(0, TWorkItem(xt, i+1))
-                elif isinstance(b, TGrow):
-                    xt = b(xt)
-                    NT, C, H, W = xt.shape
-                    # each tgrow has multiple successor nodes
-                    for xt_next in reversed(xt.view(N, b.stride*C, H, W).chunk(b.stride, 1)):
-                        # add successor to work queue
-                        work_queue.insert(0, TWorkItem(xt_next, i+1))
-                else:
-                    # normal block with no funny business
-                    xt = b(xt)
-                    # add successor to work queue
-                    work_queue.insert(0, TWorkItem(xt, i+1))
-        progress_bar.close()
-        x = torch.stack(out, 1)
-    return x
+        return apply_model_with_memblocks_sequential(model, x, show_progress_bar)
 
 class TAEHV(nn.Module):
     def __init__(self, checkpoint_path="taehv.pth", encoder_time_downscale=(True, True, False), decoder_time_upscale=(False, True, True), decoder_space_upscale=(True, True, True), patch_size=1, latent_channels=16):
@@ -208,6 +226,11 @@ class TAEHV(nn.Module):
                     sd[key] = sd[key][-new_sd[key].shape[0]:]
         return sd
 
+    def preprocess_input_frames(self, x):
+        """Preprocess RGB input frames prior to the main encoder sequence."""
+        if self.patch_size > 1: x = F.pixel_unshuffle(x, self.patch_size)
+        return x
+
     def encode_video(self, x, parallel=True, show_progress_bar=True):
         """Encode a sequence of frames.
 
@@ -218,13 +241,18 @@ class TAEHV(nn.Module):
               if False, frames will be processed sequentially.
         Returns NTCHW latent tensor with ~Gaussian values.
         """
-        if self.patch_size > 1: x = F.pixel_unshuffle(x, self.patch_size)
+        x = self.preprocess_input_frames(x)
         if x.shape[1] % self.t_downscale != 0:
             # pad at end to multiple of self.t_downscale
             n_pad = self.t_downscale - x.shape[1] % self.t_downscale
             padding = x[:, -1:].repeat_interleave(n_pad, dim=1)
             x = torch.cat([x, padding], 1)
         return apply_model_with_memblocks(self.encoder, x, parallel, show_progress_bar)
+
+    def postprocess_output_frames(self, x):
+        """Postprocess RGB frames after the main decoder sequence."""
+        if self.patch_size > 1: x = F.pixel_shuffle(x, self.patch_size)
+        return x.clamp_(0, 1)
 
     def decode_video(self, x, parallel=True, show_progress_bar=True):
         """Decode a sequence of frames.
@@ -238,14 +266,136 @@ class TAEHV(nn.Module):
         """
         skip_trim = self.is_cogvideox and x.shape[1] % 2 == 0
         x = apply_model_with_memblocks(self.decoder, x, parallel, show_progress_bar)
-        x = x.clamp_(0, 1)
-        if self.patch_size > 1: x = F.pixel_shuffle(x, self.patch_size)
+        x = self.postprocess_output_frames(x)
         if skip_trim:
             # skip trimming for cogvideox to make frame counts match.
             # this still doesn't have correct temporal alignment for certain frame counts
             # (cogvideox seems to pad at the start?), but for multiple-of-4 it's fine.
             return x
         return x[:, self.frames_to_trim:]
+
+class StreamingTAEHV(nn.Module):
+    def __init__(self, taehv):
+        """Streaming wrapper around TAEHV for real-time use-cases (where not all inputs are available immediately).
+
+        Encode-decode (video-to-video) usage:
+            streaming = StreamingTAEHV(taehv)
+            for frame in video_frames:
+                latent = streaming.encode(frame_tensor)
+                decoded = streaming.decode(latent)  # feeds latent if not None, then returns next frame
+                if decoded is not None:
+                    display(decoded)
+            for frame in streaming.flush():
+                display(frame)
+
+        Decode-only (world model) usage:
+            streaming = StreamingTAEHV(taehv)
+            while running:
+                latent = world_model.step()       # latent represents t_upscale frames
+                frame = streaming.decode(latent)   # returns first frame immediately
+                while frame is not None:           # retrieve remaining frames from this latent
+                    display(frame)
+                    frame = streaming.decode()
+        """
+        super().__init__()
+        self.taehv = taehv
+        self.reset()
+
+    def reset(self):
+        """Reset all internal state. Call this to start encoding/decoding a new stream."""
+        self.encoder_work_queue, self.encoder_memory = [], [None] * len(self.taehv.encoder)
+        self.decoder_work_queue, self.decoder_memory = [], [None] * len(self.taehv.decoder)
+        self.n_frames_encoded, self.n_frames_decoded = 0, 0
+        self._last_encoder_input_frame = None
+
+    def encode(self, x=None):
+        """Feed an input frame (optional) and try to produce an encoder output.
+
+        The encoder accumulates t_downscale input frames before producing one latent,
+        so most calls will return None. Use flush_encoder() at end-of-stream to pad and
+        drain any remaining latents.
+
+        Args:
+            x: NTCHW RGB frame tensor with values in [0, 1], or None to just process pending work.
+        Returns: N1CHW latent tensor, or None if not enough input has been accumulated.
+        """
+        if x is not None:
+            assert x.ndim == 5 and x.shape[2] == self.taehv.image_channels, f"Expected NTCHW frames but got {x.shape=}"
+            self._last_encoder_input_frame = x[:, -1:]
+            x = self.taehv.preprocess_input_frames(x)
+            self.encoder_work_queue.extend(TWorkItem(xt, 0) for xt in x.unbind(1))
+            self.n_frames_encoded += x.shape[1]
+        xt = apply_model_with_memblocks_sequential_single_step(
+            self.taehv.encoder, self.encoder_memory, self.encoder_work_queue)
+        return xt
+
+    def decode(self, x=None):
+        """Feed a latent (optional) and try to produce a decoded frame.
+
+        Each latent produces t_upscale output frames due to temporal upscaling. The first
+        decode(latent) call returns the first of these frames; call decode() with no argument
+        to retrieve the rest, one at a time. Each call does the minimum decoder work needed to
+        produce one frame.
+
+        Startup frames (the first frames_to_trim raw decoder outputs, used for causal alignment
+        with the reference VAE) are consumed internally and never returned.
+
+        Args:
+            x: NTCHW latent tensor, or None to retrieve the next pending frame.
+        Returns: N1CHW decoded RGB frame tensor, or None if the queue needs more input.
+        """
+        if x is not None:
+            assert x.ndim == 5 and x.shape[2] == self.taehv.latent_channels, f"Expected NTCHW latents but got {x.shape=}"
+            self.decoder_work_queue.extend(TWorkItem(xt, 0) for xt in x.unbind(1))
+        while True:
+            xt = apply_model_with_memblocks_sequential_single_step(
+                self.taehv.decoder, self.decoder_memory, self.decoder_work_queue)
+            if xt is None:
+                return None
+            self.n_frames_decoded += 1
+            # skip startup frames (to match decode_video trim behavior)
+            if not self.taehv.is_cogvideox and self.n_frames_decoded <= self.taehv.frames_to_trim:
+                continue
+            return self.taehv.postprocess_output_frames(xt)
+
+    def flush_encoder(self):
+        """Pad (if needed) and drain all remaining latents from the encoder.
+
+        Returns list of N1CHW latent tensors.
+        """
+        latents = []
+        if self._last_encoder_input_frame is not None and self.n_frames_encoded % self.taehv.t_downscale != 0:
+            n_pad = self.taehv.t_downscale - self.n_frames_encoded % self.taehv.t_downscale
+            for _ in range(n_pad):
+                lat = self.encode(self._last_encoder_input_frame)
+                if lat is not None:
+                    latents.append(lat)
+        while (lat := self.encode()) is not None:
+            latents.append(lat)
+        return latents
+
+    def flush_decoder(self):
+        """Drain all remaining decoded frames from the decoder.
+
+        Returns list of N1CHW decoded RGB frame tensors.
+        """
+        frames = []
+        while (frame := self.decode()) is not None:
+            frames.append(frame)
+        return frames
+
+    def flush(self):
+        """Flush encoder (with padding) and decoder, returning all remaining decoded frames.
+
+        Returns list of N1CHW decoded RGB frame tensors.
+        """
+        frames = []
+        for latent in self.flush_encoder():
+            frame = self.decode(latent)
+            if frame is not None:
+                frames.append(frame)
+        frames.extend(self.flush_decoder())
+        return frames
 
 @torch.no_grad()
 def main():

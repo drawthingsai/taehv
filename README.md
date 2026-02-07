@@ -96,7 +96,12 @@ TAEHV(decoder_time_upscale=(False, False), decoder_space_upscale=(False, False, 
 
 If you have a powerful GPU or are decoding at a reduced resolution, you can also set `parallel=True` in `TAEHV.decode_video` to decode all frames at once (which is faster but requires more memory).
 
-TAEHV is fully causal (with finite receptive field) so it's structurally possible to display TAEHV output "realtime" (the instant each frame is decoded) rather than waiting for the sequence to complete.
+## How can I use TAEHV to encode and decode live video?
+
+TAEHV's default `encode_video` and `decode_video` methods process the entire input sequence before returning the entire result.
+For live / real-time scenarios (like video-to-video or world modeling), you'll want to use the `StreamingTAEHV` wrapper, which processes each input timestep sequentially and streams intermediate outputs as soon as they're ready.
+
+You can see example `StreamingTAEHV` usage in the [streaming demo notebook](./examples/TAEHV1.5_Streaming_Demo.ipynb) or in [`taehv.py`](./taehv.py)'s `StreamingTAEHV` docstrings.
 
 ## How can I cite TAEHV in a publication?
 
