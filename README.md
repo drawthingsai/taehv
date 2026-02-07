@@ -103,6 +103,8 @@ For live / real-time scenarios (like video-to-video or world modeling), you'll w
 
 You can see example `StreamingTAEHV` usage in the [streaming demo notebook](./examples/TAEHV1.5_Streaming_Demo.ipynb) or in [`taehv.py`](./taehv.py)'s `StreamingTAEHV` docstrings.
 
+![Streaming demo notebook screen recording](https://github.com/user-attachments/assets/90f4cb9f-c056-4c7e-926f-2b10cf072c73)
+
 ## How can I cite TAEHV in a publication?
 
 If you find TAEHV useful in your research, you can cite the TAEHV repo as a web link:
