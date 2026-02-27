@@ -1,0 +1,35 @@
+[build-system]
+requires = ["setuptools>=64"]
+build-backend = "setuptools.build_meta"
+
+[project]
+name = "taehv"
+version = "0.1.0"
+description = "Tiny AutoEncoder for Hunyuan Video (and other video models)"
+readme = "README.md"
+license = "MIT"
+requires-python = ">=3.8"
+authors = [
+    {name = "Ollin Boer Bohan"},
+]
+keywords = ["autoencoder", "video", "hunyuan", "wan", "diffusion"]
+classifiers = [
+    "Development Status :: 4 - Beta",
+    "Intended Audience :: Science/Research",
+    "Programming Language :: Python :: 3",
+    "Topic :: Scientific/Engineering :: Artificial Intelligence",
+]
+dependencies = [
+    "torch",
+    "tqdm",
+]
+
+[project.urls]
+Homepage = "https://github.com/madebyollin/taehv"
+Repository = "https://github.com/madebyollin/taehv"
+
+[project.scripts]
+taehv = "taehv:main"
+
+[tool.setuptools]
+py-modules = ["taehv"]
