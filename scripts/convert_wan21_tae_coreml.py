@@ -207,6 +207,12 @@ def parse_args() -> argparse.Namespace:
     p.add_argument("--convert-to", default="mlprogram", choices=["mlprogram", "neuralnetwork"], help="CoreML format")
     p.add_argument("--min-deployment", default="macos13", choices=["macos13", "macos12", "macos11"], help="Minimum deployment target")
     p.add_argument("--skip-equivalence-check", action="store_true", help="Skip exact baseline-vs-optimized check")
+    p.add_argument(
+        "--memblock-mode",
+        choices=["optimized", "fullmem"],
+        default="optimized",
+        help="`optimized` folds MemBlock(x,0) first conv channels; `fullmem` keeps original full MemBlock weights.",
+    )
     p.add_argument("--compile", action="store_true", help="Also compile to .mlmodelc via xcrun")
     return p.parse_args()
 
@@ -226,9 +232,15 @@ def main() -> None:
     io_dtype = np.float16 if args.io_float16 else np.float32
     dec_model = build_decoder_only(args.checkpoint, args.disable_temporal_upscale)
     baseline = BaselineFirstFrameDecoder(dec_model.decoder, dec_model.patch_size)
-    model = OptimizedFirstFrameDecoder(dec_model.decoder, dec_model.patch_size)
-    if not args.skip_equivalence_check:
-        check_exact_equivalence(baseline, model, h, c)
+    if args.memblock_mode == "optimized":
+        model = OptimizedFirstFrameDecoder(dec_model.decoder, dec_model.patch_size)
+        if not args.skip_equivalence_check:
+            check_exact_equivalence(baseline, model, h, c)
+        model_stem = "wan21_decoder_firstframe_nhwc"
+    else:
+        # Keep full decoder weights (including the past branch of MemBlock conv1).
+        model = baseline
+        model_stem = "wan21_decoder_firstframe_nhwc_fullmem"
     model.eval()
     # Keep trace in fp32, then request fp16 lowering in ct.convert.
     example = torch.randn(1, h, w, c, dtype=torch.float32)
@@ -260,14 +272,14 @@ def main() -> None:
     mlmodel = ct.convert(traced, **convert_kwargs)
 
     if args.convert_to == "mlprogram":
-        mlmodel_path = out_dir / "wan21_decoder_firstframe_nhwc.mlpackage"
+        mlmodel_path = out_dir / f"{model_stem}.mlpackage"
     else:
-        mlmodel_path = out_dir / "wan21_decoder_firstframe_nhwc.mlmodel"
+        mlmodel_path = out_dir / f"{model_stem}.mlmodel"
     mlmodel.save(str(mlmodel_path))
     print(f"Saved {mlmodel_path}")
 
     if args.compile:
-        mlmodelc_dir = out_dir / "wan21_decoder_firstframe_nhwc.mlmodelc"
+        mlmodelc_dir = out_dir / f"{model_stem}.mlmodelc"
         cmd = [
             "xcrun",
             "coremlcompiler",
