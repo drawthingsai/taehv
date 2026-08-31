@@ -48,7 +48,7 @@ To use TAEHV with different video models, you can load the different model weigh
     * The standard TAE decoder for LTX2.3/LTX2.5 has blurry outputs (see [thread](https://github.com/madebyollin/taehv/issues/20#issuecomment-4048513703)) so I also trained a larger, less-blurry `taeltx2_3_wide` variant. Those `taeltx2_3_wide` weights are [here](https://github.com/madebyollin/taehv/blob/2026_03_11_taeltx23_wide/taeltx2_3_wide.pth) and **ComfyUI-bleh** has `taeltx2_3_wide`-compatible previewing code [here](https://github.com/blepping/ComfyUI-bleh/pull/37).
 * For **Mochi 1** and **SVD** (which use different architectures), see the other repos [TAEM1](https://github.com/madebyollin/taem1) and [TAESDV](https://github.com/madebyollin/taesdv).
 
-The main model weight `.pth` files are in the repository root directory. Converted `.safetensors` files are located in the [safetensors](./safetensors) subdirectory.
+The main model weight `.pth` files are in the repository root directory. Converted `.safetensors` files are located in the [safetensors](./safetensors) subdirectory (TAEHV can load either format, although `.safetensors` files require the optional `safetensors` package).
 
 TAEHV picks the matching architecture based on the checkpoint filename. If you've renamed a checkpoint file, pass the original name explicitly instead, like `TAEHV("my_renamed_weights.pth", arch_name="taeh3")`.
 

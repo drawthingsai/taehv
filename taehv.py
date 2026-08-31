@@ -239,7 +239,12 @@ class TAEHV(nn.Module):
         self.frames_to_trim = self.t_upscale - 1
 
         if checkpoint_path is not None:
-            self.load_state_dict(self.patch_tgrow_layers(torch.load(checkpoint_path, map_location="cpu", weights_only=True)))
+            if str(checkpoint_path).endswith(".safetensors"):
+                from safetensors.torch import load_file
+                sd = load_file(str(checkpoint_path))
+            else:
+                sd = torch.load(checkpoint_path, map_location="cpu", weights_only=True)
+            self.load_state_dict(self.patch_tgrow_layers(sd))
 
     def patch_tgrow_layers(self, sd):
         """Patch TGrow layers to use a smaller kernel if needed.

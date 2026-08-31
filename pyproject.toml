@@ -24,6 +24,9 @@ dependencies = [
     "tqdm",
 ]
 
+[project.optional-dependencies]
+safetensors = ["safetensors"]
+
 [project.urls]
 Homepage = "https://github.com/madebyollin/taehv"
 Repository = "https://github.com/madebyollin/taehv"
