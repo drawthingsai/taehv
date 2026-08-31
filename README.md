@@ -50,6 +50,8 @@ To use TAEHV with different video models, you can load the different model weigh
 
 The main model weight `.pth` files are in the repository root directory. Converted `.safetensors` files are located in the [safetensors](./safetensors) subdirectory.
 
+TAEHV picks the matching architecture based on the checkpoint filename. If you've renamed a checkpoint file, pass the original name explicitly instead, like `TAEHV("my_renamed_weights.pth", arch_name="taeh3")`.
+
 If there's another open video model that would benefit from a TAEHV version, please file an [issue](https://github.com/madebyollin/taehv/issues) (or, worst-case, try [training your own](https://github.com/madebyollin/seraena/blob/main/TAEHV_Training_Example.ipynb)).
 
 ## Where can I get TAEHV?

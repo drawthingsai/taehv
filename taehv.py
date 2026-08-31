@@ -176,7 +176,7 @@ def apply_model_with_memblocks(model, x, parallel, show_progress_bar):
         return apply_model_with_memblocks_sequential(model, x, show_progress_bar)
 
 class TAEHV(nn.Module):
-    def __init__(self, checkpoint_path="taehv.pth", encoder_time_downscale=(True, True, False), decoder_time_upscale=(False, True, True), decoder_space_upscale=(True, True, True), patch_size=1, latent_channels=16, arch_variant=None):
+    def __init__(self, checkpoint_path="taehv.pth", encoder_time_downscale=None, decoder_time_upscale=None, decoder_space_upscale=None, patch_size=None, latent_channels=None, arch_name=None):
         """Initialize pretrained TAEHV from the given checkpoint.
 
         Arg:
@@ -186,27 +186,28 @@ class TAEHV(nn.Module):
             decoder_space_upscale: whether spatial upsampling is enabled for each block. upsampling can be disabled for a cheaper preview.
             patch_size: input/output pixelshuffle patch-size for this model.
             latent_channels: number of latent channels (z dim) for this model.
-            arch_variant: decoder architecture variant. None (base) or "super" (higher-quality, ~2x decoder params). Autodetected from filename if None.
+            arch_name: checkpoint name to take the architecture from, like "taeh3" or "taehv1_5_super"
+              (a "_super" suffix selects the larger, higher-quality decoder). Taken from checkpoint_path
+              if None, so pass it explicitly if you've renamed the checkpoint file.
+        Architecture arguments left as None are guessed from the checkpoint name.
         """
         super().__init__()
-        self.patch_size = patch_size
-        self.latent_channels = latent_channels
+        # each architecture setting is guessed from the checkpoint name, unless it was passed explicitly
+        self.arch_name = str(arch_name or checkpoint_path or "")
+        if "taehv1_5" in self.arch_name: patch_size, latent_channels = patch_size or 2, latent_channels or 32
+        if "taew2_2" in self.arch_name: patch_size, latent_channels = patch_size or 2, latent_channels or 48
+        if "taeh3" in self.arch_name: patch_size, latent_channels = patch_size or 2, latent_channels or 24
+        if "taeltx" in self.arch_name: # same for both 2 and 2.3
+            patch_size, latent_channels = patch_size or 4, latent_channels or 128
+            encoder_time_downscale, decoder_time_upscale = encoder_time_downscale or (True, True, True), decoder_time_upscale or (True, True, True)
+        self.patch_size = patch_size or 1
+        self.latent_channels = latent_channels or 16
         self.image_channels = 3
+        encoder_time_downscale = encoder_time_downscale or (True, True, False)
+        decoder_time_upscale = decoder_time_upscale or (False, True, True)
+        decoder_space_upscale = decoder_space_upscale or (True, True, True)
         if len(decoder_time_upscale) == 2:
             decoder_time_upscale = (False, *decoder_time_upscale)
-        self.is_cogvideox = checkpoint_path is not None and "taecvx" in checkpoint_path
-        self.is_h3 = checkpoint_path is not None and "taeh3" in checkpoint_path
-        if checkpoint_path is not None and "taew2_2" in checkpoint_path:
-            self.patch_size, self.latent_channels = 2, 48
-        if checkpoint_path is not None and "taehv1_5" in checkpoint_path:
-            self.patch_size, self.latent_channels = 2, 32
-        if self.is_h3:
-            self.patch_size, self.latent_channels, encoder_time_downscale = 2, 24, (True, True, False)
-        if checkpoint_path is not None and "taeltx" in checkpoint_path: # same for both 2 and 2.3
-            self.patch_size, self.latent_channels, encoder_time_downscale, decoder_time_upscale = 4, 128, (True, True, True), (True, True, True)
-        if arch_variant is None and checkpoint_path is not None and "_super" in checkpoint_path:
-            arch_variant = "super"
-        assert arch_variant in (None, "super"), f"unrecognized arch_variant {arch_variant!r}"
         self.encoder = nn.Sequential(
             conv(self.image_channels*self.patch_size**2, 64), nn.ReLU(inplace=True),
             TPool(64, 2 if encoder_time_downscale[0] else 1), conv(64, 64, stride=2, bias=False), MemBlock(64, 64), MemBlock(64, 64), MemBlock(64, 64),
@@ -214,7 +215,7 @@ class TAEHV(nn.Module):
             TPool(64, 2 if encoder_time_downscale[2] else 1), conv(64, 64, stride=2, bias=False), MemBlock(64, 64), MemBlock(64, 64), MemBlock(64, 64),
             conv(64, self.latent_channels),
         )
-        if arch_variant == "super":
+        if "_super" in self.arch_name:
             n_f = [512, 256, 128, 64]
             self.decoder = nn.Sequential(
                 nn.Conv2d(self.latent_channels, n_f[0], 1, bias=False),
@@ -296,7 +297,7 @@ class TAEHV(nn.Module):
               if False, frames will be processed sequentially.
         Returns NTCHW latent tensor with ~Gaussian values.
         """
-        if self.is_h3:
+        if "taeh3" in self.arch_name:
             return self._encode_h3_video(x, parallel, show_progress_bar)
         x = self.preprocess_input_frames(x)
         if x.shape[1] % self.t_downscale != 0:
@@ -321,9 +322,9 @@ class TAEHV(nn.Module):
               if False, frames will be processed sequentially.
         Returns NTCHW RGB tensor with ~[0, 1] values.
         """
-        if self.is_h3:
+        if "taeh3" in self.arch_name:
             return self._decode_h3_video(x, parallel, show_progress_bar)
-        skip_trim = self.is_cogvideox and x.shape[1] % 2 == 0
+        skip_trim = "taecvx" in self.arch_name and x.shape[1] % 2 == 0
         x = apply_model_with_memblocks(self.decoder, x, parallel, show_progress_bar)
         x = self.postprocess_output_frames(x)
         if skip_trim:
@@ -413,7 +414,7 @@ class StreamingTAEHV(nn.Module):
                 return None
             self.n_frames_decoded += 1
             # skip startup frames (to match decode_video trim behavior)
-            if not self.taehv.is_cogvideox and self.n_frames_decoded <= self.taehv.frames_to_trim:
+            if "taecvx" not in self.taehv.arch_name and self.n_frames_decoded <= self.taehv.frames_to_trim:
                 continue
             return self.taehv.postprocess_output_frames(xt)
 
