@@ -31,20 +31,26 @@ See the [profiling notebook](./examples/TAEHV_Profiling.ipynb) for details on th
 
 To use TAEHV with different video models, you can load the different model weight files from this repo:
 
-* For **Hunyuan Video 1.5**, load the `taehv1_5` weights ([example notebook](./examples/TAEHV1.5_Encoding_Decoding_Demo.ipynb))
+* For **MiniMax H3**, load the `taeh3` weights (currently supported in [ComfyUI nightly](https://github.com/Comfy-Org/ComfyUI/pull/15695), [ComfyUI-KJNodes](https://huggingface.co/Kijai/MiniMax-H3-TAE) and [ComfyUI-bleh](https://github.com/blepping/ComfyUI-bleh))
+* For **Hunyuan Video 1.5**, load the `taehv1_5` weights ([example notebook](./examples/TAEHV1.5_Encoding_Decoding_Demo.ipynb)).
+    * You can also use `taehv1_5_super` to get higher-quality output at the cost of slightly more compute.
 * For **Wan 2.1**, load the `taew2_1` weights (see the [Wan 2.1 example notebook](./examples/TAEW2.1_T2I_Demo.ipynb)).
 * For **Wan 2.2**, load different files depending on model scale:
   * For **Wan 2.2 5B**, load the `taew2_2` weights ([example notebook](examples/TAEW2.2_T2I_Demo.ipynb)).
+    * You can also use `taew2_2_super` to get higher-quality output at the cost of slightly more compute.
   * For **Wan 2.2 14B**, load the `taew2_1` weights since Wan 2.2 14B [still uses the older Wan 2.1 VAE](https://github.com/Wan-Video/Wan2.2/blob/main/wan/configs/wan_t2v_A14B.py#L16).
 * for **Qwen Image**, load the `taew2_1` weights (since Qwen Image uses the Wan 2.1 VAE encoder).
 * For **CogVideoX**,  load the `taecvx` weights ([example notebook](./examples/TAECVX_T2I_Demo.ipynb)).
 * For **Hunyuan Video 1**, load the `taehv` weights ([example notebook](./examples/TAEHV_T2I_Demo.ipynb)).
 * For **Open-Sora 1.3**, load the `taeos1_3` weights.
 * For **LTX-2**, load the `taeltx_2` weights ([example notebook](./examples/TAELTX2_Encoding_Decoding_Demo.ipynb)).
-* For **LTX-2.3**, load the `taeltx2_3` weights
+* For **LTX-2.3** and **LTX-2.5**, load the `taeltx2_3` weights
+    * The standard TAE decoder for LTX2.3/LTX2.5 has blurry outputs (see [thread](https://github.com/madebyollin/taehv/issues/20#issuecomment-4048513703)) so I also trained a larger, less-blurry `taeltx2_3_wide` variant. Those `taeltx2_3_wide` weights are [here](https://github.com/madebyollin/taehv/blob/2026_03_11_taeltx23_wide/taeltx2_3_wide.pth) and **ComfyUI-bleh** has `taeltx2_3_wide`-compatible previewing code [here](https://github.com/blepping/ComfyUI-bleh/pull/37).
 * For **Mochi 1** and **SVD** (which use different architectures), see the other repos [TAEM1](https://github.com/madebyollin/taem1) and [TAESDV](https://github.com/madebyollin/taesdv).
 
-The main model weight `.pth` files are in the repository root directory. Converted `.safetensors` files are located in the [safetensors](./safetensors) subdirectory.
+The main model weight `.pth` files are in the repository root directory. Converted `.safetensors` files are located in the [safetensors](./safetensors) subdirectory (TAEHV can load either format, although `.safetensors` files require the optional `safetensors` package).
+
+TAEHV picks the matching architecture based on the checkpoint filename. If you've renamed a checkpoint file, pass the original name explicitly instead, like `TAEHV("my_renamed_weights.pth", arch_name="taeh3")`.
 
 If there's another open video model that would benefit from a TAEHV version, please file an [issue](https://github.com/madebyollin/taehv/issues) (or, worst-case, try [training your own](https://github.com/madebyollin/seraena/blob/main/TAEHV_Training_Example.ipynb)).
 
@@ -105,6 +111,15 @@ For live / real-time scenarios (like video-to-video or world modeling), you'll w
 You can see example `StreamingTAEHV` usage in the [streaming demo notebook](./examples/TAEHV1.5_Streaming_Demo.ipynb) or in [`taehv.py`](./taehv.py)'s `StreamingTAEHV` docstrings.
 
 ![Streaming demo notebook screen recording](https://github.com/user-attachments/assets/90f4cb9f-c056-4c7e-926f-2b10cf072c73)
+
+## How can I make TAEHV decode video at higher-quality?
+
+For `taehv1_5` and `taew2_2`, you can use the larger `taehv1_5_super` and `taew2_2_super` weights to get higher-quality video output at the cost of slightly increased compute (and higher parameter count). These `super` models are intended for realtime world modeling and video usecases where TAEHV output serves as the final output (rather than a temporary preview).
+
+Here's a side-by-side comparison using Overworld's [Waypoint-1.5](https://over.world/blog/waypoint-1-5); though neither VAE is perfect, TAEHV1.5-Super does a better job at decoding fine details and keeping them visually-stable.
+
+https://github.com/user-attachments/assets/0b78cce8-7ade-4ac0-8c80-fd979f8e8aa3
+
 
 ## How can I cite TAEHV in a publication?
 

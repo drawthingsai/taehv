@@ -27,6 +27,18 @@ class MemBlock(nn.Module):
     def forward(self, x, past):
         return self.act(self.conv(torch.cat([x, past], 1)) + self.skip(x))
 
+class SuperMemBlock(nn.Module):
+    """MemBlock variant used by the Super decoder (ConvNeXt-style: 7x7 depthwise conv + inverted bottleneck)."""
+    def __init__(self, n_f):
+        super().__init__()
+        self.conv = nn.Sequential(
+            nn.Conv2d(n_f*2, n_f*2, 7, padding=3, groups=n_f*2, bias=False),
+            nn.Conv2d(n_f*2, n_f*4, 1), nn.ReLU(inplace=True),
+            nn.Conv2d(n_f*4, n_f, 1, bias=False),
+        )
+    def forward(self, x, past):
+        return self.conv(torch.cat([x, past], 1)) + x
+
 class TPool(nn.Module):
     def __init__(self, n_f, stride):
         super().__init__()
@@ -64,7 +76,7 @@ def apply_model_with_memblocks_parallel(model, x, show_progress_bar):
 
     # parallel over input timesteps, iterate over blocks
     for b in tqdm(model, disable=not show_progress_bar):
-        if isinstance(b, MemBlock):
+        if isinstance(b, (MemBlock, SuperMemBlock)):
             NT, C, H, W = x.shape
             T = NT // N
             _x = x.reshape(N, T, C, H, W)
@@ -92,7 +104,7 @@ def apply_model_with_memblocks_sequential_single_step(model, memory, work_queue,
         if i == len(model):
             return xt.unsqueeze(1)
         b = model[i]
-        if isinstance(b, MemBlock):
+        if isinstance(b, (MemBlock, SuperMemBlock)):
             # mem blocks are simple since we're visiting the graph in causal order
             if memory[i] is None:
                 xt_new = b(xt, xt * 0)
@@ -164,7 +176,7 @@ def apply_model_with_memblocks(model, x, parallel, show_progress_bar):
         return apply_model_with_memblocks_sequential(model, x, show_progress_bar)
 
 class TAEHV(nn.Module):
-    def __init__(self, checkpoint_path="taehv.pth", encoder_time_downscale=(True, True, False), decoder_time_upscale=(False, True, True), decoder_space_upscale=(True, True, True), patch_size=1, latent_channels=16):
+    def __init__(self, checkpoint_path="taehv.pth", encoder_time_downscale=None, decoder_time_upscale=None, decoder_space_upscale=None, patch_size=None, latent_channels=None, arch_name=None):
         """Initialize pretrained TAEHV from the given checkpoint.
 
         Arg:
@@ -174,20 +186,28 @@ class TAEHV(nn.Module):
             decoder_space_upscale: whether spatial upsampling is enabled for each block. upsampling can be disabled for a cheaper preview.
             patch_size: input/output pixelshuffle patch-size for this model.
             latent_channels: number of latent channels (z dim) for this model.
+            arch_name: checkpoint name to take the architecture from, like "taeh3" or "taehv1_5_super"
+              (a "_super" suffix selects the larger, higher-quality decoder). Taken from checkpoint_path
+              if None, so pass it explicitly if you've renamed the checkpoint file.
+        Architecture arguments left as None are guessed from the checkpoint name.
         """
         super().__init__()
-        self.patch_size = patch_size
-        self.latent_channels = latent_channels
+        # each architecture setting is guessed from the checkpoint name, unless it was passed explicitly
+        self.arch_name = str(arch_name or checkpoint_path or "")
+        if "taehv1_5" in self.arch_name: patch_size, latent_channels = patch_size or 2, latent_channels or 32
+        if "taew2_2" in self.arch_name: patch_size, latent_channels = patch_size or 2, latent_channels or 48
+        if "taeh3" in self.arch_name: patch_size, latent_channels = patch_size or 2, latent_channels or 24
+        if "taeltx" in self.arch_name: # same for both 2 and 2.3
+            patch_size, latent_channels = patch_size or 4, latent_channels or 128
+            encoder_time_downscale, decoder_time_upscale = encoder_time_downscale or (True, True, True), decoder_time_upscale or (True, True, True)
+        self.patch_size = patch_size or 1
+        self.latent_channels = latent_channels or 16
         self.image_channels = 3
+        encoder_time_downscale = encoder_time_downscale or (True, True, False)
+        decoder_time_upscale = decoder_time_upscale or (False, True, True)
+        decoder_space_upscale = decoder_space_upscale or (True, True, True)
         if len(decoder_time_upscale) == 2:
             decoder_time_upscale = (False, *decoder_time_upscale)
-        self.is_cogvideox = checkpoint_path is not None and "taecvx" in checkpoint_path
-        if checkpoint_path is not None and "taew2_2" in checkpoint_path:
-            self.patch_size, self.latent_channels = 2, 48
-        if checkpoint_path is not None and "taehv1_5" in checkpoint_path:
-            self.patch_size, self.latent_channels = 2, 32
-        if checkpoint_path is not None and "taeltx" in checkpoint_path: # same for both 2 and 2.3
-            self.patch_size, self.latent_channels, encoder_time_downscale, decoder_time_upscale = 4, 128, (True, True, True), (True, True, True)
         self.encoder = nn.Sequential(
             conv(self.image_channels*self.patch_size**2, 64), nn.ReLU(inplace=True),
             TPool(64, 2 if encoder_time_downscale[0] else 1), conv(64, 64, stride=2, bias=False), MemBlock(64, 64), MemBlock(64, 64), MemBlock(64, 64),
@@ -195,21 +215,36 @@ class TAEHV(nn.Module):
             TPool(64, 2 if encoder_time_downscale[2] else 1), conv(64, 64, stride=2, bias=False), MemBlock(64, 64), MemBlock(64, 64), MemBlock(64, 64),
             conv(64, self.latent_channels),
         )
-        n_f = [256, 128, 64, 64]
-        self.decoder = nn.Sequential(
-            Clamp(), conv(self.latent_channels, n_f[0]), nn.ReLU(inplace=True),
-            MemBlock(n_f[0], n_f[0]), MemBlock(n_f[0], n_f[0]), MemBlock(n_f[0], n_f[0]), nn.Upsample(scale_factor=2 if decoder_space_upscale[0] else 1), TGrow(n_f[0], 2 if decoder_time_upscale[0] else 1), conv(n_f[0], n_f[1], bias=False),
-            MemBlock(n_f[1], n_f[1]), MemBlock(n_f[1], n_f[1]), MemBlock(n_f[1], n_f[1]), nn.Upsample(scale_factor=2 if decoder_space_upscale[1] else 1), TGrow(n_f[1], 2 if decoder_time_upscale[1] else 1), conv(n_f[1], n_f[2], bias=False),
-            MemBlock(n_f[2], n_f[2]), MemBlock(n_f[2], n_f[2]), MemBlock(n_f[2], n_f[2]), nn.Upsample(scale_factor=2 if decoder_space_upscale[2] else 1), TGrow(n_f[2], 2 if decoder_time_upscale[2] else 1), conv(n_f[2], n_f[3], bias=False),
-            nn.ReLU(inplace=True), conv(n_f[3], self.image_channels*self.patch_size**2),
-        )
+        if "_super" in self.arch_name:
+            n_f = [512, 256, 128, 64]
+            self.decoder = nn.Sequential(
+                nn.Conv2d(self.latent_channels, n_f[0], 1, bias=False),
+                SuperMemBlock(n_f[0]), SuperMemBlock(n_f[0]), SuperMemBlock(n_f[0]), conv(n_f[0], n_f[1]*(2 if decoder_space_upscale[0] else 1)**2), nn.ReLU(inplace=True), nn.PixelShuffle(2 if decoder_space_upscale[0] else 1), TGrow(n_f[1], 2 if decoder_time_upscale[0] else 1),
+                SuperMemBlock(n_f[1]), SuperMemBlock(n_f[1]), SuperMemBlock(n_f[1]), conv(n_f[1], n_f[2]*(2 if decoder_space_upscale[1] else 1)**2), nn.ReLU(inplace=True), nn.PixelShuffle(2 if decoder_space_upscale[1] else 1), TGrow(n_f[2], 2 if decoder_time_upscale[1] else 1),
+                SuperMemBlock(n_f[2]), SuperMemBlock(n_f[2]), SuperMemBlock(n_f[2]), conv(n_f[2], n_f[3]*(2 if decoder_space_upscale[2] else 1)**2), nn.ReLU(inplace=True), nn.PixelShuffle(2 if decoder_space_upscale[2] else 1), TGrow(n_f[3], 2 if decoder_time_upscale[2] else 1),
+                conv(n_f[3], self.image_channels*self.patch_size**2),
+            )
+        else:
+            n_f = [256, 128, 64, 64]
+            self.decoder = nn.Sequential(
+                Clamp(), conv(self.latent_channels, n_f[0]), nn.ReLU(inplace=True),
+                MemBlock(n_f[0], n_f[0]), MemBlock(n_f[0], n_f[0]), MemBlock(n_f[0], n_f[0]), nn.Upsample(scale_factor=2 if decoder_space_upscale[0] else 1), TGrow(n_f[0], 2 if decoder_time_upscale[0] else 1), conv(n_f[0], n_f[1], bias=False),
+                MemBlock(n_f[1], n_f[1]), MemBlock(n_f[1], n_f[1]), MemBlock(n_f[1], n_f[1]), nn.Upsample(scale_factor=2 if decoder_space_upscale[1] else 1), TGrow(n_f[1], 2 if decoder_time_upscale[1] else 1), conv(n_f[1], n_f[2], bias=False),
+                MemBlock(n_f[2], n_f[2]), MemBlock(n_f[2], n_f[2]), MemBlock(n_f[2], n_f[2]), nn.Upsample(scale_factor=2 if decoder_space_upscale[2] else 1), TGrow(n_f[2], 2 if decoder_time_upscale[2] else 1), conv(n_f[2], n_f[3], bias=False),
+                nn.ReLU(inplace=True), conv(n_f[3], self.image_channels*self.patch_size**2),
+            )
         # computed properties
         self.t_downscale = 2**sum(t.stride == 2 for t in self.encoder if isinstance(t, TPool))
         self.t_upscale = 2**sum(t.stride == 2 for t in self.decoder if isinstance(t, TGrow))
         self.frames_to_trim = self.t_upscale - 1
 
         if checkpoint_path is not None:
-            self.load_state_dict(self.patch_tgrow_layers(torch.load(checkpoint_path, map_location="cpu", weights_only=True)))
+            if str(checkpoint_path).endswith(".safetensors"):
+                from safetensors.torch import load_file
+                sd = load_file(str(checkpoint_path))
+            else:
+                sd = torch.load(checkpoint_path, map_location="cpu", weights_only=True)
+            self.load_state_dict(self.patch_tgrow_layers(sd))
 
     def patch_tgrow_layers(self, sd):
         """Patch TGrow layers to use a smaller kernel if needed.
@@ -231,6 +266,32 @@ class TAEHV(nn.Module):
         if self.patch_size > 1: x = F.pixel_unshuffle(x, self.patch_size)
         return x
 
+    def _encode_h3_video(self, x, parallel, show_progress_bar):
+        """Match H3's 17-frame chunks and three-token drop.
+        https://huggingface.co/MiniMaxAI/MiniMax-H3/blob/fa9c8ab1eaa21c8ae25e7e40b83b2e6002f340af/FL2VA/video_vae/klvae.py#L461-L503
+        """
+        batch = x.shape[0]
+        x = torch.cat([x, x[:, -1:].expand(-1, -x.shape[1] % 17, -1, -1, -1)], dim=1)
+        x = F.pad(x.reshape(batch, -1, 17, *x.shape[2:]), (0, 0, 0, 0, 0, 0, 3, 0))
+        x = self.preprocess_input_frames(x)
+        if parallel:
+            x = apply_model_with_memblocks(self.encoder, x.flatten(0, 1), True, show_progress_bar)
+            x = x.reshape(batch, -1, *x.shape[2:])
+        else:
+            x = torch.cat([apply_model_with_memblocks(self.encoder, chunk, False, False)
+                           for chunk in tqdm(x.unbind(1), disable=not show_progress_bar)], dim=1)
+        return x[:, :-3]
+
+    def _decode_h3_video(self, x, parallel, show_progress_bar):
+        """Match H3's five-token chunks and per-chunk prefix trim.
+        https://huggingface.co/MiniMaxAI/MiniMax-H3/blob/fa9c8ab1eaa21c8ae25e7e40b83b2e6002f340af/FL2VA/video_vae/klvae.py#L678-L786
+        """
+        x = apply_model_with_memblocks(self.decoder, x, parallel, show_progress_bar)
+        chunk_frames = 5 * self.t_upscale
+        x = F.pad(x, (0, 0, 0, 0, 0, 0, 0, -x.shape[1] % chunk_frames))
+        x = x.unflatten(1, (-1, chunk_frames))[:, :, self.frames_to_trim:].flatten(1, 2)
+        return self.postprocess_output_frames(x[:, :-3 * self.t_upscale])
+
     def encode_video(self, x, parallel=True, show_progress_bar=True):
         """Encode a sequence of frames.
 
@@ -241,6 +302,8 @@ class TAEHV(nn.Module):
               if False, frames will be processed sequentially.
         Returns NTCHW latent tensor with ~Gaussian values.
         """
+        if "taeh3" in self.arch_name:
+            return self._encode_h3_video(x, parallel, show_progress_bar)
         x = self.preprocess_input_frames(x)
         if x.shape[1] % self.t_downscale != 0:
             # pad at end to multiple of self.t_downscale
@@ -264,7 +327,9 @@ class TAEHV(nn.Module):
               if False, frames will be processed sequentially.
         Returns NTCHW RGB tensor with ~[0, 1] values.
         """
-        skip_trim = self.is_cogvideox and x.shape[1] % 2 == 0
+        if "taeh3" in self.arch_name:
+            return self._decode_h3_video(x, parallel, show_progress_bar)
+        skip_trim = "taecvx" in self.arch_name and x.shape[1] % 2 == 0
         x = apply_model_with_memblocks(self.decoder, x, parallel, show_progress_bar)
         x = self.postprocess_output_frames(x)
         if skip_trim:
@@ -354,7 +419,7 @@ class StreamingTAEHV(nn.Module):
                 return None
             self.n_frames_decoded += 1
             # skip startup frames (to match decode_video trim behavior)
-            if not self.taehv.is_cogvideox and self.n_frames_decoded <= self.taehv.frames_to_trim:
+            if "taecvx" not in self.taehv.arch_name and self.n_frames_decoded <= self.taehv.frames_to_trim:
                 continue
             return self.taehv.postprocess_output_frames(xt)
 
